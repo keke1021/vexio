@@ -1,12 +1,8 @@
 import axios from 'axios';
 
-// ─── Token store ────────────────────────────────────────────────────────────
-// El access token vive en memoria (no en localStorage) para reducir la
-// superficie de ataque ante XSS. Solo el refresh token persiste en localStorage.
-
 let _accessToken = null;
 let _isRefreshing = false;
-let _failedQueue = []; // Requests que esperan el nuevo access token
+let _failedQueue = [];
 
 export const tokenStore = {
   getAccessToken: () => _accessToken,
@@ -22,24 +18,18 @@ export const tokenStore = {
   },
 };
 
-// ─── Helpers internos ────────────────────────────────────────────────────────
-
 const processQueue = (error, token = null) => {
   _failedQueue.forEach((p) => (error ? p.reject(error) : p.resolve(token)));
   _failedQueue = [];
 };
 
-// Detecta si la URL es un endpoint de auth para evitar el bucle de refresh
 const isAuthUrl = (url = '') => url.includes('/auth/');
 
-// ─── Instancia Axios ─────────────────────────────────────────────────────────
-
 const api = axios.create({
-  baseURL: 'http://localhost:3001/api',
+  baseURL: 'https://vexio-production-75d5.up.railway.app/api',
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Request interceptor: adjunta el access token a cada request protegido
 api.interceptors.request.use((config) => {
   const token = tokenStore.getAccessToken();
   if (token && !isAuthUrl(config.url)) {
@@ -48,14 +38,12 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor: si 401, intenta renovar el token y reintenta la request
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
     const status = error.response?.status;
 
-    // No reintentar: endpoints de auth, requests ya reintentados, o sin refresh token
     if (status !== 401 || originalRequest._retry || isAuthUrl(originalRequest.url)) {
       return Promise.reject(error);
     }
@@ -63,7 +51,6 @@ api.interceptors.response.use(
     const refreshToken = tokenStore.getRefreshToken();
     if (!refreshToken) return Promise.reject(error);
 
-    // Si ya hay un refresh en curso, encolar esta request
     if (_isRefreshing) {
       return new Promise((resolve, reject) => {
         _failedQueue.push({ resolve, reject });
@@ -77,8 +64,7 @@ api.interceptors.response.use(
     _isRefreshing = true;
 
     try {
-      // Usamos axios directo (no la instancia `api`) para evitar interceptors recursivos
-      const { data } = await axios.post('http://localhost:3001/api/auth/refresh', {
+      const { data } = await axios.post('https://vexio-production-75d5.up.railway.app/api/auth/refresh', {
         refreshToken,
       });
 
@@ -92,7 +78,6 @@ api.interceptors.response.use(
       tokenStore.clear();
       localStorage.removeItem('vexio_user');
       localStorage.removeItem('vexio_tenant');
-      // Redirige a login sin depender de React Router
       window.location.href = '/login';
       return Promise.reject(refreshError);
     } finally {
