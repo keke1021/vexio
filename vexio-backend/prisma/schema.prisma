@@ -1,0 +1,518 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id                 String       @id @default(cuid())
+  name               String
+  slug               String       @unique
+  email              String       @unique
+  phone              String?
+  address            String?
+  isActive           Boolean      @default(true)
+  status             TenantStatus @default(ACTIVE)
+  plan               TenantPlan   @default(STARTER)
+  activeModules      String[]     @default([])
+  extraUsers         Int          @default(0)
+  subscriptionEndsAt DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  users          User[]
+  products       Product[]
+  inventoryItems InventoryItem[]
+  suppliers      Supplier[]
+  sales          Sale[]
+  customers      Customer[]
+  repairOrders   RepairOrder[]
+  cashSessions   CashSession[]
+  cashMovements  CashMovement[]
+  purchaseOrders PurchaseOrder[]
+  payments       Payment[]
+  notifications  Notification[]
+  tickets        SupportTicket[]
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  SELLER
+  TECH
+  SUPERADMIN
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  TRIAL
+}
+
+enum TenantPlan {
+  STARTER
+  PRO
+  FULL
+}
+
+model User {
+  id       String  @id @default(cuid())
+  email    String
+  password String
+  name     String
+  role     Role    @default(SELLER)
+  isActive Boolean @default(true)
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  refreshTokens       RefreshToken[]
+  sales               Sale[]
+  technicianRepairs   RepairOrder[]
+  repairStatusChanges RepairStatusHistory[]
+  cashSessionsOpened  CashSession[]         @relation("CashOpened")
+  cashSessionsClosed  CashSession[]         @relation("CashClosed")
+  cashMovements       CashMovement[]        @relation("CashMovementCreator")
+  tickets             SupportTicket[]
+  ticketReplies       TicketReply[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([email, tenantId])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+// ─── Inventario ───────────────────────────────────────────────────────────────
+
+model Product {
+  id       String @id @default(cuid())
+  name     String
+  color    String
+  storage  String
+  minStock Int    @default(3)
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  items InventoryItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, color, storage, tenantId])
+}
+
+enum Condition {
+  NEW
+  LIKE_NEW
+  REFURBISHED
+  USED
+}
+
+enum ItemStatus {
+  AVAILABLE
+  SOLD
+  RESERVED
+  DEFECTIVE
+}
+
+model InventoryItem {
+  id          String     @id @default(cuid())
+  imei        String
+  condition   Condition  @default(NEW)
+  status      ItemStatus @default(AVAILABLE)
+  costPrice   Decimal    @db.Decimal(10, 2)
+  salePrice   Decimal    @db.Decimal(10, 2)
+  accessories String[]
+  notes       String?
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  saleItems SaleItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([imei, tenantId])
+}
+
+model Supplier {
+  id          String  @id @default(cuid())
+  name        String
+  city        String
+  paymentDays Int     @default(30)
+  phone       String?
+  email       String?
+  notes       String?
+  isActive    Boolean @default(true)
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  items          InventoryItem[]
+  purchaseOrders PurchaseOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, tenantId])
+}
+
+// ─── Punto de Venta ───────────────────────────────────────────────────────────
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  CARD
+  INSTALLMENTS
+}
+
+enum ExchangeType {
+  BLUE
+  USDT
+  NONE
+}
+
+enum SaleCurrency {
+  ARS
+  USD
+  USDT
+}
+
+model Sale {
+  id            String        @id @default(cuid())
+  total         Decimal       @db.Decimal(10, 2)
+  paymentMethod PaymentMethod
+  currency      SaleCurrency  @default(ARS)
+  customerName  String?
+  customerPhone String?
+  notes         String?
+  exchangeRate  Float?
+  exchangeType  ExchangeType?
+
+  sellerId String
+  seller   User   @relation(fields: [sellerId], references: [id])
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  items        SaleItem[]
+  cashMovement CashMovement?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SaleItem {
+  id        String  @id @default(cuid())
+  salePrice Decimal @db.Decimal(10, 2)
+  costPrice Decimal @db.Decimal(10, 2)
+
+  saleId String
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+// ─── Reparaciones ─────────────────────────────────────────────────────────────
+
+model Customer {
+  id    String  @id @default(cuid())
+  name  String
+  phone String
+  email String?
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  repairs RepairOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([phone, tenantId])
+}
+
+enum RepairStatus {
+  RECEIVED
+  DIAGNOSING
+  IN_PROGRESS
+  WAITING_PARTS
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum FaultType {
+  SCREEN
+  BATTERY
+  CHARGING
+  CAMERA
+  SPEAKER
+  BUTTON
+  WATER
+  SOFTWARE
+  OTHER
+}
+
+model RepairOrder {
+  id            String @id @default(cuid())
+  customerName  String
+  customerPhone String
+  deviceModel   String
+  deviceColor   String?
+  deviceImei    String?
+  faultType     FaultType
+  faultDescription String
+
+  status        RepairStatus @default(RECEIVED)
+  budget        Decimal?     @db.Decimal(10, 2)
+  estimatedDate DateTime?
+  readyAt       DateTime?
+  deliveredAt   DateTime?
+  internalNotes String?
+
+  technicianId String?
+  technician   User?   @relation(fields: [technicianId], references: [id])
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  statusHistory RepairStatusHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Proveedores / Compras ────────────────────────────────────────────────────
+
+enum PurchaseStatus {
+  PENDING
+  RECEIVED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id         String         @id @default(cuid())
+  status     PurchaseStatus @default(PENDING)
+  total      Decimal        @db.Decimal(10, 2)
+  currency   SaleCurrency   @default(ARS)
+  notes      String?
+  receivedAt DateTime?
+
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  items PurchaseOrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PurchaseOrderItem {
+  id          String  @id @default(cuid())
+  description String
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(10, 2)
+
+  orderId String
+  order   PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+// ─── Caja ─────────────────────────────────────────────────────────────────────
+
+enum MovementType {
+  INCOME
+  EXPENSE
+}
+
+model CashSession {
+  id            String    @id @default(cuid())
+  initialAmount Decimal   @db.Decimal(10, 2)
+  finalAmount   Decimal?  @db.Decimal(10, 2)
+  openedAt      DateTime  @default(now())
+  closedAt      DateTime?
+  notes         String?
+
+  openedById String
+  openedBy   User   @relation("CashOpened", fields: [openedById], references: [id])
+
+  closedById String?
+  closedBy   User?  @relation("CashClosed", fields: [closedById], references: [id])
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  movements CashMovement[]
+}
+
+model CashMovement {
+  id            String        @id @default(cuid())
+  type          MovementType
+  amount        Decimal       @db.Decimal(10, 2)
+  currency      SaleCurrency  @default(ARS)
+  exchangeRate  Decimal?      @db.Decimal(10, 2)
+  description   String
+  paymentMethod PaymentMethod
+
+  sessionId String
+  session   CashSession @relation(fields: [sessionId], references: [id])
+
+  saleId String?  @unique
+  sale   Sale?    @relation(fields: [saleId], references: [id])
+
+  createdById String
+  createdBy   User   @relation("CashMovementCreator", fields: [createdById], references: [id])
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model RepairStatusHistory {
+  id     String       @id @default(cuid())
+  status RepairStatus
+  notes  String?
+
+  repairId String
+  repair   RepairOrder @relation(fields: [repairId], references: [id], onDelete: Cascade)
+
+  changedById String
+  changedBy   User   @relation(fields: [changedById], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+// ─── Admin / Pagos ────────────────────────────────────────────────────────────
+
+enum PaymentCurrency {
+  USD
+  PESOS
+  USDT
+}
+
+model Payment {
+  id       String          @id @default(cuid())
+  amount   Decimal         @db.Decimal(10, 2)
+  currency PaymentCurrency
+  paidAt   DateTime
+  notes    String?
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+// ─── Notificaciones ───────────────────────────────────────────────────────────
+
+enum NotificationType {
+  INFO
+  WARNING
+  DANGER
+}
+
+model Notification {
+  id      String           @id @default(cuid())
+  message String
+  type    NotificationType @default(INFO)
+  read    Boolean          @default(false)
+
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+// ─── Soporte ──────────────────────────────────────────────────────────────────
+
+enum TicketCategory {
+  ERROR_SISTEMA
+  CONSULTA_GENERAL
+  PROBLEMA_MODULO
+  SUGERENCIA
+  FACTURACION
+}
+
+enum TicketPriority {
+  BAJA
+  MEDIA
+  ALTA
+}
+
+enum TicketStatus {
+  ABIERTO
+  EN_PROCESO
+  RESUELTO
+}
+
+model SupportTicket {
+  id          String         @id @default(cuid())
+  title       String
+  description String
+  category    TicketCategory
+  priority    TicketPriority @default(MEDIA)
+  status      TicketStatus   @default(ABIERTO)
+  attachments String[]
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  replies TicketReply[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TicketReply {
+  id          String   @id @default(cuid())
+  message     String
+  attachments String[]
+  isAdmin     Boolean  @default(false)
+
+  ticketId String
+  ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
