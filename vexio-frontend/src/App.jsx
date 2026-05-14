@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
 import Layout from './components/Layout';
@@ -33,6 +34,7 @@ import AdminStats from './pages/admin/AdminStats';
 import AdminTickets from './pages/admin/AdminTickets';
 
 const App = () => (
+  <ThemeProvider>
   <AuthProvider>
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -85,6 +87,7 @@ const App = () => (
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   </AuthProvider>
+  </ThemeProvider>
 );
 
 export default App;

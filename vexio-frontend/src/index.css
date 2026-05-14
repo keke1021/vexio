@@ -23,3 +23,73 @@ body {
     color: black !important;
   }
 }
+
+/* ─── Dark Mode ──────────────────────────────────────────────────────────────
+   Overrides Tailwind's hardcoded hex utilities so all components respond to
+   the .dark class on <html> without needing individual dark: variants.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.dark body {
+  background-color: #0F172A;
+  color: #F1F5F9;
+}
+
+/* ── Backgrounds ── */
+.dark .bg-white                     { background-color: #1E293B !important; }
+.dark .bg-\[\#F8FAFC\]             { background-color: #0F172A !important; }
+.dark .bg-\[\#F1F5F9\]             { background-color: #334155 !important; }
+.dark .bg-\[\#EFF6FF\]             { background-color: #1e3a5f !important; }
+
+/* ── Hover backgrounds ── */
+.dark .hover\:bg-white:hover        { background-color: #253448 !important; }
+.dark .hover\:bg-\[\#EFF6FF\]:hover { background-color: #1e3a5f !important; }
+.dark .hover\:bg-\[\#F8FAFC\]:hover { background-color: #253448 !important; }
+.dark .hover\:bg-\[\#D6EBFA\]:hover { background-color: #253c6e !important; }
+
+/* ── Borders ── */
+.dark .border-\[\#E2E8F0\]         { border-color: #334155 !important; }
+
+/* ── Text ── */
+.dark .text-\[\#0F172A\]           { color: #F1F5F9 !important; }
+.dark .text-\[\#374151\]           { color: #D1D5DB !important; }
+.dark .text-\[\#64748B\]           { color: #94A3B8 !important; }
+.dark .text-\[\#94A3B8\]           { color: #6B7280 !important; }
+.dark .text-\[\#CBD5E1\]           { color: #475569 !important; }
+
+/* ── Hover text ── */
+.dark .hover\:text-\[\#0F172A\]:hover { color: #F1F5F9 !important; }
+.dark .hover\:text-\[\#64748B\]:hover { color: #94A3B8 !important; }
+
+/* ── Form elements ── */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.dark select,
+.dark textarea {
+  background-color: #1E293B;
+  color: #F1F5F9;
+  border-color: #334155;
+}
+
+.dark ::placeholder { color: #475569; }
+
+.dark .file\:bg-\[\#EFF6FF\]::file-selector-button { background-color: #1e3a5f !important; }
+.dark .hover\:file\:bg-\[\#D6EBFA\]::file-selector-button:hover { background-color: #253c6e !important; }
+
+/* ── Semantic color alerts/badges (soften light backgrounds) ── */
+.dark .bg-yellow-50   { background-color: #422006 !important; }
+.dark .bg-orange-50   { background-color: #431407 !important; }
+.dark .bg-red-50      { background-color: #450a0a !important; }
+.dark .bg-emerald-50  { background-color: #052e16 !important; }
+
+.dark .border-yellow-200 { border-color: #92400e !important; }
+.dark .border-orange-200 { border-color: #9a3412 !important; }
+.dark .border-red-200    { border-color: #991b1b !important; }
+
+.dark .text-yellow-700 { color: #fbbf24 !important; }
+
+/* ── Admin violet theme ── */
+.dark .bg-violet-100      { background-color: #3b0764 !important; }
+.dark .border-violet-200  { border-color: #5b21b6 !important; }
+.dark .text-violet-700    { color: #c4b5fd !important; }
+.dark .text-violet-600    { color: #a78bfa !important; }
+.dark .text-violet-500    { color: #a78bfa !important; }
+.dark .hover\:bg-\[\#F8FAFC\]:hover.text-violet-700 { background-color: #2e1065 !important; }
