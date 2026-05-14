@@ -93,3 +93,52 @@ body {
 .dark .text-violet-600    { color: #a78bfa !important; }
 .dark .text-violet-500    { color: #a78bfa !important; }
 .dark .hover\:bg-\[\#F8FAFC\]:hover.text-violet-700 { background-color: #2e1065 !important; }
+
+/* ── Badge state contrast (compound selector beats the broad bg overrides above) ──
+   Targeting elements that carry BOTH the bg and text class simultaneously,
+   which is exactly the <span> badge pattern. Alert panels don't match because
+   their text classes live on children, not the panel element itself.          ── */
+.dark .bg-\[\#F1F5F9\].text-\[\#94A3B8\] {
+  background-color: #1E293B !important;
+  color: #CBD5E1 !important;
+  border: 1px solid #475569;
+}
+.dark .bg-yellow-50.text-yellow-600 {
+  background-color: #92400E !important;
+  color: #FDE68A !important;
+  border: 1px solid #D97706;
+}
+.dark .bg-orange-50.text-orange-500 {
+  background-color: #7F1D1D !important;
+  color: #FCA5A5 !important;
+  border: 1px solid #EF4444;
+}
+.dark .bg-red-50.text-red-500 {
+  background-color: #7F1D1D !important;
+  color: #FCA5A5 !important;
+  border: 1px solid #EF4444;
+}
+.dark .bg-emerald-50.text-emerald-600 {
+  background-color: #14532D !important;
+  color: #86EFAC !important;
+  border: 1px solid #22C55E;
+}
+
+/* ── Colored text: brighter + more saturated in dark mode ── */
+.dark .text-emerald-600  { color: #4ADE80 !important; }
+.dark .text-green-600    { color: #4ADE80 !important; }
+.dark .text-green-500    { color: #4ADE80 !important; }
+
+.dark .text-red-400      { color: #F87171 !important; }
+.dark .text-red-500      { color: #F87171 !important; }
+.dark .text-red-600      { color: #F87171 !important; }
+
+.dark .text-blue-400     { color: #60A5FA !important; }
+.dark .text-blue-500     { color: #60A5FA !important; }
+.dark .text-blue-600     { color: #60A5FA !important; }
+
+.dark .text-yellow-500   { color: #FDE68A !important; }
+.dark .text-yellow-600   { color: #FDE68A !important; }
+
+.dark .text-orange-400   { color: #FB923C !important; }
+.dark .text-orange-500   { color: #FB923C !important; }
