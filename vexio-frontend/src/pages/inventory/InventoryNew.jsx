@@ -169,8 +169,8 @@ const InventoryNew = () => {
 
         <div>
           <Label>Modelo</Label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="sm:col-span-1">
+          <div className="flex flex-col sm:flex-row gap-3 items-start">
+            <div className="flex-1 min-w-0">
               <Input
                 type="text"
                 placeholder="iPhone 15 Pro"
@@ -180,7 +180,7 @@ const InventoryNew = () => {
               />
               <p className="mt-1 text-[11px] text-[#CBD5E1]">Nombre del modelo</p>
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <Input
                 type="text"
                 placeholder="Natural Titanium"
@@ -190,12 +190,24 @@ const InventoryNew = () => {
               />
               <p className="mt-1 text-[11px] text-[#CBD5E1]">Color</p>
             </div>
-            <div>
-              <Select value={form.storage} onChange={set('storage')}>
-                {STORAGE_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </Select>
+            <div className="flex-1 min-w-0">
+              <div className="relative">
+                <select
+                  value={form.storage}
+                  onChange={set('storage')}
+                  className="w-full appearance-none bg-white border border-[#E2E8F0] rounded-lg px-4 py-2.5 pr-8
+                    text-[13px] text-[#64748B] focus:outline-none focus:border-[#3B82F6] transition-all"
+                >
+                  {STORAGE_OPTIONS.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[#94A3B8]">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                </span>
+              </div>
               <p className="mt-1 text-[11px] text-[#CBD5E1]">Storage</p>
             </div>
           </div>
