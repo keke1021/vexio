@@ -356,6 +356,7 @@ const InventoryList = () => {
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Condición</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Estado</th>
               <th className="text-right px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Precio</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Moneda</th>
               <th className="text-right px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Margen</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden xl:table-cell">Proveedor</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden xl:table-cell">Fecha</th>
@@ -364,17 +365,17 @@ const InventoryList = () => {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={8} className="text-center py-16 text-[#CBD5E1] text-[13px]">Cargando...</td>
+                <td colSpan={9} className="text-center py-16 text-[#CBD5E1] text-[13px]">Cargando...</td>
               </tr>
             )}
             {isError && (
               <tr>
-                <td colSpan={8} className="text-center py-16 text-red-400 text-[13px]">Error al cargar el inventario.</td>
+                <td colSpan={9} className="text-center py-16 text-red-400 text-[13px]">Error al cargar el inventario.</td>
               </tr>
             )}
             {!isLoading && !isError && items.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center py-16 text-[#CBD5E1] text-[13px]">No hay equipos que coincidan con los filtros.</td>
+                <td colSpan={9} className="text-center py-16 text-[#CBD5E1] text-[13px]">No hay equipos que coincidan con los filtros.</td>
               </tr>
             )}
             {items.map((item) => {
@@ -402,6 +403,15 @@ const InventoryList = () => {
                   </td>
                   <td className="px-4 py-3.5 text-right text-[#64748B] hidden lg:table-cell">
                     {formatCurrency(item.salePrice)}
+                  </td>
+                  <td className="px-4 py-3.5 hidden lg:table-cell">
+                    <span className={`inline-flex px-2 py-0.5 rounded-md text-[11px] font-medium ${
+                      item.currency === 'USD'
+                        ? 'bg-[#DCFCE7] text-[#16A34A]'
+                        : 'bg-[#F1F5F9] text-[#64748B]'
+                    }`}>
+                      {item.currency ?? 'ARS'}
+                    </span>
                   </td>
                   <td className={`px-4 py-3.5 text-right font-medium hidden lg:table-cell ${getMarginColor(item.margin)}`}>
                     {item.margin.toFixed(1)}%
