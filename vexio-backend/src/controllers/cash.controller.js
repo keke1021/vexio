@@ -6,7 +6,8 @@ const serializeDecimal = (val) => (val != null ? parseFloat(val) : null);
 
 const serializeSession = (s) => ({
   ...s,
-  initialAmount: serializeDecimal(s.initialAmount),
+  initialAmountARS: serializeDecimal(s.initialAmountARS),
+  initialAmountUSD: serializeDecimal(s.initialAmountUSD),
   finalAmount: serializeDecimal(s.finalAmount),
 });
 
@@ -46,7 +47,7 @@ const getTodaySession = async (tenantId) => {
 const openCash = async (req, res) => {
   try {
     const { tenantId, userId } = req.user;
-    const { initialAmount = 0, notes } = req.body;
+    const { initialAmountARS = 0, initialAmountUSD = 0, notes } = req.body;
 
     const existing = await prisma.cashSession.findFirst({
       where: { tenantId, closedAt: null },
@@ -57,7 +58,8 @@ const openCash = async (req, res) => {
 
     const session = await prisma.cashSession.create({
       data: {
-        initialAmount: parseFloat(initialAmount) || 0,
+        initialAmountARS: parseFloat(initialAmountARS) || 0,
+        initialAmountUSD: parseFloat(initialAmountUSD) || 0,
         notes: notes || null,
         openedById: userId,
         tenantId,
@@ -101,7 +103,7 @@ const closeCash = async (req, res) => {
 
     const income  = parseFloat(byType.find((b) => b.type === 'INCOME')?._sum.amount  ?? 0);
     const expense = parseFloat(byType.find((b) => b.type === 'EXPENSE')?._sum.amount ?? 0);
-    const finalAmount = parseFloat(session.initialAmount) + income - expense;
+    const finalAmount = parseFloat(session.initialAmountARS) + income - expense;
 
     const closed = await prisma.cashSession.update({
       where: { id: session.id },
@@ -236,7 +238,7 @@ const getMovements = async (req, res) => {
       totals: {
         income,
         expense,
-        balance: parseFloat(session.initialAmount) + income - expense,
+        balance: parseFloat(session.initialAmountARS) + income - expense,
       },
     });
   } catch (error) {
@@ -271,7 +273,7 @@ const getSummary = async (req, res) => {
     }
 
     if (!session) {
-      return res.json({ isOpen: false, session: null, income: 0, expense: 0, salesTotal: 0, balance: 0, byPaymentMethod: {} });
+      return res.json({ isOpen: false, session: null, income: 0, expense: 0, salesTotal: 0, balance: 0, byPaymentMethod: {}, byCurrency: {} });
     }
 
     const [byType, byPayment, byCurrencyRaw, salesAgg] = await Promise.all([
@@ -323,7 +325,7 @@ const getSummary = async (req, res) => {
       income,
       expense,
       salesTotal,
-      balance: parseFloat(session.initialAmount) + income - expense,
+      balance: parseFloat(session.initialAmountARS) + income - expense,
       byPaymentMethod,
       byCurrency,
     });

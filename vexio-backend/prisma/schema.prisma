@@ -361,9 +361,10 @@ enum MovementType {
 }
 
 model CashSession {
-  id            String    @id @default(cuid())
-  initialAmount Decimal   @db.Decimal(10, 2)
-  finalAmount   Decimal?  @db.Decimal(10, 2)
+  id               String   @id @default(cuid())
+  initialAmountARS Decimal  @db.Decimal(10, 2) @default(0)
+  initialAmountUSD Decimal  @db.Decimal(10, 2) @default(0)
+  finalAmount      Decimal? @db.Decimal(10, 2)
   openedAt      DateTime  @default(now())
   closedAt      DateTime?
   notes         String?
