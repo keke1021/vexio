@@ -33,37 +33,51 @@ const PencilIcon = () => (
 
 // ─── Result Card ──────────────────────────────────────────────────────────────
 
-const ResultCard = ({ item, onAdd, inCart }) => (
-  <button
-    onClick={() => onAdd(item)}
-    disabled={inCart}
-    className={`w-full text-left border rounded-xl p-4 transition-all ${
-      inCart
-        ? 'border-[#E2E8F0] bg-[#F8FAFC] opacity-40 cursor-not-allowed'
-        : 'border-[#E2E8F0] bg-white hover:border-[#3B82F6]/50 hover:bg-[#EFF6FF] cursor-pointer'
-    }`}
-    style={{ boxShadow: inCart ? 'none' : '0 1px 3px rgba(0,0,0,0.04)' }}
-  >
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <p className="text-[14px] font-medium text-[#0F172A] truncate">
-          {item.product.name} · {item.product.color} · {item.product.storage}
-        </p>
-        <p className="font-mono text-[11px] text-[#94A3B8] mt-0.5">{item.imei}</p>
-        {item.supplier && (
-          <p className="text-[11px] text-[#CBD5E1] mt-1">{item.supplier.name}</p>
-        )}
+const ResultCard = ({ item, onAdd, inCart, blueRate }) => {
+  const isUSD = item.currency !== 'ARS';
+  const primaryFmt = isUSD ? fmtUSD(item.salePrice) : formatCurrency(item.salePrice);
+  let dualLine = null;
+  if (blueRate) {
+    dualLine = isUSD
+      ? `${fmtUSD(item.salePrice)} · ${formatCurrency(item.salePrice * blueRate)} ARS`
+      : `${formatCurrency(item.salePrice)} ARS · ${fmtUSD(item.salePrice / blueRate)}`;
+  }
+
+  return (
+    <button
+      onClick={() => onAdd(item)}
+      disabled={inCart}
+      className={`w-full text-left border rounded-xl p-4 transition-all ${
+        inCart
+          ? 'border-[#E2E8F0] bg-[#F8FAFC] opacity-40 cursor-not-allowed'
+          : 'border-[#E2E8F0] bg-white hover:border-[#3B82F6]/50 hover:bg-[#EFF6FF] cursor-pointer'
+      }`}
+      style={{ boxShadow: inCart ? 'none' : '0 1px 3px rgba(0,0,0,0.04)' }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[14px] font-medium text-[#0F172A] truncate">
+            {item.product.name} · {item.product.color} · {item.product.storage}
+          </p>
+          <p className="font-mono text-[11px] text-[#94A3B8] mt-0.5">{item.imei}</p>
+          {item.supplier && (
+            <p className="text-[11px] text-[#CBD5E1] mt-1">{item.supplier.name}</p>
+          )}
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-[15px] font-bold text-[#0F172A]">{primaryFmt}</p>
+          {dualLine && (
+            <p className="text-[11px] text-[#94A3B8] mt-0.5">{dualLine}</p>
+          )}
+          <p className="text-[11px] text-[#94A3B8] mt-0.5">{item.margin?.toFixed(1)}% margen</p>
+        </div>
       </div>
-      <div className="text-right shrink-0">
-        <p className="text-[15px] font-bold text-[#0F172A]">{formatCurrency(item.salePrice)}</p>
-        <p className="text-[11px] text-[#94A3B8] mt-0.5">{item.margin?.toFixed(1)}% margen</p>
-      </div>
-    </div>
-    {inCart && (
-      <p className="mt-2 text-[11px] text-[#3B82F6]">Ya está en el carrito</p>
-    )}
-  </button>
-);
+      {inCart && (
+        <p className="mt-2 text-[11px] text-[#3B82F6]">Ya está en el carrito</p>
+      )}
+    </button>
+  );
+};
 
 // ─── Cart Item ────────────────────────────────────────────────────────────────
 
@@ -285,11 +299,22 @@ const PosMain = () => {
   }, [blueRate, saleCurrency]);
 
   // ─── Price helpers ────────────────────────────────────────────────────────
-  // cart entry: { item, baseSalePrice (always ARS), manualPrice (null | number) }
+  // cart entry: { item, baseSalePrice (in item.currency), manualPrice (null | number in saleCurrency) }
   const getDisplayPrice = (entry) => {
     if (entry.manualPrice !== null) return entry.manualPrice;
-    if (!activeRate) return entry.baseSalePrice;
-    return +(entry.baseSalePrice / activeRate).toFixed(2);
+    const itemCurrency = entry.item.currency ?? 'ARS';
+    const price = entry.baseSalePrice;
+    if (itemCurrency === saleCurrency) return price;
+    // ARS item, selling in USD/USDT → divide by blue rate
+    if (itemCurrency === 'ARS' && saleCurrency !== 'ARS') {
+      return activeRate ? +(price / activeRate).toFixed(2) : price;
+    }
+    // USD/USDT item, selling in ARS → multiply by blue rate
+    if (itemCurrency !== 'ARS' && saleCurrency === 'ARS') {
+      return blueRate ? Math.round(price * blueRate) : price;
+    }
+    // USD ↔ USDT: treat as 1:1
+    return price;
   };
 
   // ─── Search ───────────────────────────────────────────────────────────────
@@ -413,7 +438,7 @@ const PosMain = () => {
             </p>
           )}
           {results.map((item) => (
-            <ResultCard key={item.id} item={item} onAdd={addToCart} inCart={cartIds.has(item.id)} />
+            <ResultCard key={item.id} item={item} onAdd={addToCart} inCart={cartIds.has(item.id)} blueRate={blueRate} />
           ))}
           {!debouncedQ && (
             <div className="flex flex-col items-center justify-center h-full py-20 text-center">
