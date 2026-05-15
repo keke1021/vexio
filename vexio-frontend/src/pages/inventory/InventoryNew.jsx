@@ -224,25 +224,25 @@ const InventoryNew = () => {
 
         <div>
           <Label>Precios</Label>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <div className="flex gap-1.5 mb-1">
-                {['ARS', 'USD'].map((cur) => (
-                  <button
-                    key={cur}
-                    type="button"
-                    onClick={() => setForm((p) => ({ ...p, costCurrency: cur }))}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all ${
-                      form.costCurrency === cur
-                        ? 'text-white border-transparent'
-                        : 'bg-white border-[#E2E8F0] text-[#94A3B8] hover:text-[#64748B]'
-                    }`}
-                    style={form.costCurrency === cur ? { backgroundColor: '#1E3A5F' } : {}}
-                  >
-                    {cur}
-                  </button>
-                ))}
-              </div>
+          <div className="flex gap-1.5 mb-3">
+            {['ARS', 'USD'].map((cur) => (
+              <button
+                key={cur}
+                type="button"
+                onClick={() => setForm((p) => ({ ...p, costCurrency: cur }))}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all ${
+                  form.costCurrency === cur
+                    ? 'text-white border-transparent'
+                    : 'bg-white border-[#E2E8F0] text-[#94A3B8] hover:text-[#64748B]'
+                }`}
+                style={form.costCurrency === cur ? { backgroundColor: '#1E3A5F' } : {}}
+              >
+                {cur}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-row gap-4">
+            <div className="flex-1 min-w-0">
               <Input
                 type="number"
                 placeholder="0"
@@ -254,7 +254,7 @@ const InventoryNew = () => {
               />
               <p className="mt-1 text-[11px] text-[#CBD5E1]">Costo ({form.costCurrency})</p>
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <Input
                 type="number"
                 placeholder="0"
