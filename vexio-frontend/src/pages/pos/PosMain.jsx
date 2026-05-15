@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/axios';
@@ -11,10 +11,25 @@ const PAYMENT_METHODS = [
 ];
 
 const formatCurrency = (n) =>
-  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
+
+const fmtUSD = (n) =>
+  `USD ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)}`;
+
+const fmtByCurrency = (n, cur) => (cur === 'ARS' ? formatCurrency(n) : fmtUSD(n));
 
 const formatRate = (n) =>
   n != null ? new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(n) : '—';
+
+// ─── Icons ────────────────────────────────────────────────────────────────────
+
+const PencilIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+    strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+);
 
 // ─── Result Card ──────────────────────────────────────────────────────────────
 
@@ -52,40 +67,82 @@ const ResultCard = ({ item, onAdd, inCart }) => (
 
 // ─── Cart Item ────────────────────────────────────────────────────────────────
 
-const CartItem = ({ entry, onRemove }) => (
-  <div className="flex items-center justify-between gap-3 py-3 border-b border-[#E2E8F0] last:border-0">
-    <div className="min-w-0">
-      <p className="text-[13px] text-[#0F172A] truncate">
-        {entry.item.product.name} {entry.item.product.storage}
-      </p>
-      <p className="font-mono text-[11px] text-[#94A3B8] mt-0.5">{entry.item.imei}</p>
+const CartItem = ({ entry, displayPrice, currency, onRemove, onSetPrice }) => {
+  const [editing, setEditing] = useState(false);
+  const [inputVal, setInputVal] = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  const startEdit = () => {
+    setInputVal(currency === 'ARS' ? Math.round(displayPrice).toString() : displayPrice.toFixed(2));
+    setEditing(true);
+  };
+
+  const confirmEdit = () => {
+    const val = parseFloat(inputVal);
+    if (!isNaN(val) && val >= 0) onSetPrice(entry.item.id, val);
+    setEditing(false);
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-3 py-3 border-b border-[#E2E8F0] last:border-0">
+      <div className="min-w-0">
+        <p className="text-[13px] text-[#0F172A] truncate">
+          {entry.item.product.name} {entry.item.product.storage}
+        </p>
+        <p className="font-mono text-[11px] text-[#94A3B8] mt-0.5">{entry.item.imei}</p>
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {editing ? (
+          <input
+            ref={inputRef}
+            type="number"
+            value={inputVal}
+            onChange={(e) => setInputVal(e.target.value)}
+            onBlur={confirmEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') confirmEdit();
+              if (e.key === 'Escape') setEditing(false);
+            }}
+            className="w-24 bg-white border border-[#3B82F6] rounded-md px-2 py-1
+              text-[12px] text-[#0F172A] focus:outline-none tabular-nums"
+          />
+        ) : (
+          <>
+            <span className={`text-[13px] font-medium ${
+              entry.manualPrice !== null ? 'text-amber-500' : 'text-[#64748B]'
+            }`}>
+              {fmtByCurrency(displayPrice, currency)}
+            </span>
+            <button
+              onClick={startEdit}
+              className="text-[#CBD5E1] hover:text-[#64748B] transition-colors"
+              title="Editar precio"
+            >
+              <PencilIcon />
+            </button>
+          </>
+        )}
+        <button
+          onClick={() => onRemove(entry.item.id)}
+          className="text-[#CBD5E1] hover:text-red-400 transition-colors text-[16px] leading-none ml-1"
+          title="Quitar"
+        >
+          ×
+        </button>
+      </div>
     </div>
-    <div className="flex items-center gap-3 shrink-0">
-      <span className="text-[13px] font-medium text-[#64748B]">{formatCurrency(entry.salePrice)}</span>
-      <button
-        onClick={() => onRemove(entry.item.id)}
-        className="text-[#CBD5E1] hover:text-red-400 transition-colors text-[16px] leading-none"
-        title="Quitar"
-      >
-        ×
-      </button>
-    </div>
-  </div>
-);
+  );
+};
 
 // ─── Rates Widget ─────────────────────────────────────────────────────────────
 
-const RatesWidget = ({ onRateSelect, selectedRate, selectedType }) => {
+const RatesWidget = ({ rates, onRateSelect, selectedType }) => {
   const [expanded, setExpanded] = useState(false);
   const [usdAmount, setUsdAmount] = useState('');
-
-  const { data: rates } = useQuery({
-    queryKey:        ['rates'],
-    queryFn:         () => api.get('/rates').then((r) => r.data),
-    staleTime:       5 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
-    throwOnError:    false,
-  });
 
   const blue = rates?.blue;
   const usdt = rates?.usdt;
@@ -93,9 +150,8 @@ const RatesWidget = ({ onRateSelect, selectedRate, selectedType }) => {
   const blueArs = usdAmount ? Math.round(parseFloat(usdAmount) * (blue?.sell ?? 0)) : null;
   const usdtArs = usdAmount ? Math.round(parseFloat(usdAmount) * (usdt?.price ?? 0)) : null;
 
-  const fmtTs = (ts) => ts
-    ? new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-    : null;
+  const fmtTs = (ts) =>
+    ts ? new Date(ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : null;
 
   return (
     <div className="border-t border-white/10" style={{ backgroundColor: '#1E3A5F' }}>
@@ -191,9 +247,9 @@ const PosMain = () => {
   const queryClient = useQueryClient();
   const searchRef = useRef(null);
 
-  const [search, setSearch]           = useState('');
-  const [debouncedQ, setDebouncedQ]   = useState('');
-  const [cart, setCart]               = useState([]);
+  const [search, setSearch]               = useState('');
+  const [debouncedQ, setDebouncedQ]       = useState('');
+  const [cart, setCart]                   = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('');
   const [saleCurrency, setSaleCurrency]   = useState('ARS');
   const [customerName, setCustomerName]   = useState('');
@@ -210,10 +266,37 @@ const PosMain = () => {
     return () => clearTimeout(t);
   }, [search]);
 
+  // ─── Rates (hoisted so PosMain can auto-convert prices) ───────────────────
+  const { data: rates } = useQuery({
+    queryKey:        ['rates'],
+    queryFn:         () => api.get('/rates').then((r) => r.data),
+    staleTime:       5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    throwOnError:    false,
+  });
+
+  const blueRate  = rates?.blue?.sell ?? null;
+  // Both USD and USDT use blue sell rate for conversion
+  const activeRate = (saleCurrency === 'USD' || saleCurrency === 'USDT') ? blueRate : null;
+
+  // Keep exchangeRate in sync when rate refreshes (e.g. every 5 min)
+  useEffect(() => {
+    if (saleCurrency !== 'ARS' && blueRate) setExchangeRate(blueRate);
+  }, [blueRate, saleCurrency]);
+
+  // ─── Price helpers ────────────────────────────────────────────────────────
+  // cart entry: { item, baseSalePrice (always ARS), manualPrice (null | number) }
+  const getDisplayPrice = (entry) => {
+    if (entry.manualPrice !== null) return entry.manualPrice;
+    if (!activeRate) return entry.baseSalePrice;
+    return +(entry.baseSalePrice / activeRate).toFixed(2);
+  };
+
+  // ─── Search ───────────────────────────────────────────────────────────────
   const { data: searchData, isFetching } = useQuery({
-    queryKey: ['pos-search', debouncedQ],
-    queryFn:  () => api.get('/pos/search-item', { params: { q: debouncedQ } }).then((r) => r.data),
-    enabled:  debouncedQ.trim().length >= 2,
+    queryKey:  ['pos-search', debouncedQ],
+    queryFn:   () => api.get('/pos/search-item', { params: { q: debouncedQ } }).then((r) => r.data),
+    enabled:   debouncedQ.trim().length >= 2,
     staleTime: 10_000,
   });
 
@@ -230,15 +313,35 @@ const PosMain = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchData]);
 
-  const addToCart    = (item) => {
+  // ─── Cart actions ─────────────────────────────────────────────────────────
+  const addToCart = (item) => {
     if (cartIds.has(item.id)) return;
-    setCart((prev) => [...prev, { item, salePrice: item.salePrice }]);
+    setCart((prev) => [...prev, { item, baseSalePrice: item.salePrice, manualPrice: null }]);
   };
-  const removeFromCart = (itemId) => setCart((prev) => prev.filter((c) => c.item.id !== itemId));
 
-  const total      = cart.reduce((sum, c) => sum + c.salePrice, 0);
+  const removeFromCart = (itemId) =>
+    setCart((prev) => prev.filter((c) => c.item.id !== itemId));
+
+  const setItemPrice = (itemId, price) =>
+    setCart((prev) => prev.map((e) => e.item.id === itemId ? { ...e, manualPrice: price } : e));
+
+  const handleCurrencyChange = (cur) => {
+    setSaleCurrency(cur);
+    setCart((prev) => prev.map((e) => ({ ...e, manualPrice: null })));
+    if (cur === 'ARS') {
+      setExchangeType('NONE');
+      setExchangeRate(null);
+    } else {
+      setExchangeType('BLUE');
+      setExchangeRate(blueRate);
+    }
+  };
+
+  const total      = cart.reduce((sum, c) => sum + getDisplayPrice(c), 0);
   const canConfirm = cart.length > 0 && paymentMethod;
+  const noRateWarn = saleCurrency !== 'ARS' && !blueRate;
 
+  // ─── Sale mutation ────────────────────────────────────────────────────────
   const saleMutation = useMutation({
     mutationFn: (data) => api.post('/pos/sales', data).then((r) => r.data),
     onSuccess: (data) => {
@@ -253,12 +356,12 @@ const PosMain = () => {
   const handleConfirm = () => {
     setSaleError('');
     saleMutation.mutate({
-      items: cart.map((c) => ({ inventoryItemId: c.item.id, salePrice: c.salePrice })),
+      items:        cart.map((c) => ({ inventoryItemId: c.item.id, salePrice: getDisplayPrice(c) })),
       paymentMethod,
-      currency: saleCurrency,
-      customerName:  customerName || undefined,
-      exchangeType:  exchangeType !== 'NONE' ? exchangeType : undefined,
-      exchangeRate:  exchangeRate ?? undefined,
+      currency:     saleCurrency,
+      customerName: customerName || undefined,
+      exchangeType: exchangeType !== 'NONE' ? exchangeType : undefined,
+      exchangeRate: exchangeRate ?? undefined,
     });
   };
 
@@ -320,9 +423,9 @@ const PosMain = () => {
         </div>
 
         <RatesWidget
+          rates={rates}
           onRateSelect={handleRateSelect}
           selectedType={exchangeType}
-          selectedRate={exchangeRate}
         />
       </div>
 
@@ -345,7 +448,14 @@ const PosMain = () => {
             <p className="text-center py-12 text-[12px] text-[#CBD5E1]">El carrito está vacío</p>
           ) : (
             cart.map((entry) => (
-              <CartItem key={entry.item.id} entry={entry} onRemove={removeFromCart} />
+              <CartItem
+                key={entry.item.id}
+                entry={entry}
+                displayPrice={getDisplayPrice(entry)}
+                currency={saleCurrency}
+                onRemove={removeFromCart}
+                onSetPrice={setItemPrice}
+              />
             ))
           )}
         </div>
@@ -353,17 +463,25 @@ const PosMain = () => {
         <div className="border-t border-[#E2E8F0] px-5 py-5 space-y-4 bg-white"
           style={{ boxShadow: '0 -1px 4px rgba(0,0,0,0.04)' }}>
 
-          <div className="flex items-baseline justify-between">
-            <span className="text-[12px] text-[#94A3B8] uppercase tracking-wider">Total</span>
-            <span className="text-[24px] font-bold text-[#0F172A]">{formatCurrency(total)}</span>
+          {/* Total + TC info */}
+          <div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[12px] text-[#94A3B8] uppercase tracking-wider">Total</span>
+              <span className="text-[24px] font-bold text-[#0F172A]">{fmtByCurrency(total, saleCurrency)}</span>
+            </div>
+            {saleCurrency !== 'ARS' && blueRate && (
+              <p className="text-[11px] text-[#94A3B8] text-right mt-0.5">
+                TC Blue: ${Math.round(blueRate).toLocaleString('es-AR')}
+              </p>
+            )}
+            {noRateWarn && (
+              <p className="text-[11px] text-amber-500 mt-1">
+                ⚠ Cotización blue no disponible — precios sin convertir
+              </p>
+            )}
           </div>
 
-          {exchangeType !== 'NONE' && exchangeRate && (
-            <p className="text-[11px] text-[#64748B]">
-              {exchangeType === 'BLUE' ? 'Dólar blue' : 'USDT'}: ${exchangeRate?.toFixed(0)}/USD
-            </p>
-          )}
-
+          {/* Medio de pago */}
           <div>
             <p className="text-[10px] text-[#94A3B8] uppercase tracking-wider mb-2">Medio de pago</p>
             <div className="grid grid-cols-2 gap-1.5">
@@ -383,13 +501,14 @@ const PosMain = () => {
             </div>
           </div>
 
+          {/* Moneda */}
           <div>
             <p className="text-[10px] text-[#94A3B8] uppercase tracking-wider mb-2">Moneda de la venta</p>
             <div className="flex gap-1.5">
               {['ARS', 'USD', 'USDT'].map((cur) => (
                 <button
                   key={cur}
-                  onClick={() => setSaleCurrency(cur)}
+                  onClick={() => handleCurrencyChange(cur)}
                   className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
                     saleCurrency === cur
                       ? 'text-white'
@@ -401,13 +520,9 @@ const PosMain = () => {
                 </button>
               ))}
             </div>
-            {(saleCurrency === 'USD' || saleCurrency === 'USDT') && exchangeRate && (
-              <p className="mt-1.5 text-[11px] text-[#64748B]">
-                Cambio: ${Math.round(exchangeRate).toLocaleString('es-AR')} por {saleCurrency}
-              </p>
-            )}
           </div>
 
+          {/* Cliente */}
           <div>
             <button
               onClick={() => setShowCustomer(!showCustomer)}
