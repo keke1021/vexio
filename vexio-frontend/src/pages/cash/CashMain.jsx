@@ -14,6 +14,9 @@ const PAYMENT_LABELS = {
 const fmt = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
 
+const fmtUsd = (n) =>
+  `USD ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)}`;
+
 const fmtTime = (d) =>
   d ? new Date(d).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -27,6 +30,35 @@ const StatCard = ({ label, value, accent }) => (
     <p className={`text-[22px] font-semibold tracking-tight ${accent ?? 'text-[#0F172A]'}`}>{value}</p>
   </div>
 );
+
+const BalanceCard = ({ currency, income, expense }) => {
+  const net = income - expense;
+  const fmtVal = currency === 'ARS' ? fmt : fmtUsd;
+  return (
+    <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4"
+      style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+      <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.15em] mb-3">
+        Balance {currency}
+      </p>
+      <div className="space-y-1.5">
+        <div className="flex justify-between text-[13px]">
+          <span className="text-[#94A3B8]">Ingresos</span>
+          <span className="text-emerald-600 font-medium">{fmtVal(income)}</span>
+        </div>
+        <div className="flex justify-between text-[13px]">
+          <span className="text-[#94A3B8]">Egresos</span>
+          <span className="text-red-500 font-medium">{fmtVal(expense)}</span>
+        </div>
+        <div className="border-t border-[#E2E8F0] pt-1.5 flex justify-between text-[13px]">
+          <span className="text-[#64748B] font-medium">Saldo neto</span>
+          <span className={`font-bold ${net >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+            {fmtVal(net)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const OpenPanel = ({ onOpen, isPending }) => {
   const [amount, setAmount] = useState('');
@@ -184,6 +216,12 @@ const CashMain = () => {
   const byPayment  = summary?.byPaymentMethod ?? {};
   const byCurrency = summary?.byCurrency ?? {};
 
+  const arsData = byCurrency['ARS'] ?? { income: 0, expense: 0 };
+  const usdData = {
+    income:  (byCurrency['USD']?.income  ?? 0) + (byCurrency['USDT']?.income  ?? 0),
+    expense: (byCurrency['USD']?.expense ?? 0) + (byCurrency['USDT']?.expense ?? 0),
+  };
+
   return (
     <div className="px-6 pt-8 pb-16 max-w-[900px] mx-auto">
 
@@ -252,11 +290,10 @@ const CashMain = () => {
 
       {session && (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
             <StatCard label="Monto inicial"     value={fmt(session.initialAmount)} />
             <StatCard label="Ventas"            value={fmt(salesTotal)} accent="text-[#3B82F6]" />
             <StatCard label="Ingresos manuales" value={fmt(income - salesTotal)} accent="text-emerald-600" />
-            <StatCard label="Saldo actual"      value={fmt(balance)} />
           </div>
 
           {Object.keys(byPayment).length > 0 && (
@@ -277,27 +314,10 @@ const CashMain = () => {
             </div>
           )}
 
-          {Object.keys(byCurrency).length > 0 && (
-            <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4 mb-6"
-              style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-              <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.15em] mb-3">Por moneda</p>
-              <div className="flex flex-wrap gap-x-6 gap-y-2">
-                {['ARS', 'USD', 'USDT'].map((cur) => {
-                  const vals = byCurrency[cur];
-                  if (!vals) return null;
-                  return (
-                    <div key={cur} className="flex items-baseline gap-2">
-                      <span className="text-[11px] font-bold text-[#64748B]">{cur}</span>
-                      <span className="text-[13px] text-emerald-600 font-medium">+{fmt(vals.income)}</span>
-                      {vals.expense > 0 && (
-                        <span className="text-[11px] text-red-500">−{fmt(vals.expense)}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+            <BalanceCard currency="ARS" income={arsData.income} expense={arsData.expense} />
+            <BalanceCard currency="USD" income={usdData.income} expense={usdData.expense} />
+          </div>
 
           {expense > 0 && (
             <div className="flex justify-between items-center text-[13px] mb-6 px-1">
