@@ -137,8 +137,9 @@ model InventoryItem {
   imei        String
   condition   Condition  @default(NEW)
   status      ItemStatus @default(AVAILABLE)
-  costPrice   Decimal    @db.Decimal(10, 2)
-  salePrice   Decimal    @db.Decimal(10, 2)
+  costPrice   Decimal      @db.Decimal(10, 2)
+  salePrice   Decimal      @db.Decimal(10, 2)
+  currency    SaleCurrency @default(ARS)
   accessories String[]
   notes       String?
 

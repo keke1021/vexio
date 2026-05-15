@@ -333,14 +333,19 @@ const bulkUpload = async (req, res) => {
       const row = rows[i];
       const rowNum = i + 2;
 
-      const modelo      = String(row.modelo || '').trim();
-      const color       = String(row.color || '').trim();
-      const almac       = String(row.almacenamiento || '').trim();
-      const condRaw     = String(row.condicion || '').trim().toLowerCase();
-      const costo       = parseFloat(row.costo);
-      const precioVenta = parseFloat(row.precio_venta);
-      const imeiRaw     = String(row.imei || '').trim();
-      const notas       = String(row.notas || '').trim() || null;
+      const modelo        = String(row.modelo || '').trim();
+      const color         = String(row.color || '').trim();
+      const almac         = String(row.almacenamiento || '').trim();
+      const condRaw       = String(row.condicion || '').trim().toLowerCase();
+      const costo         = parseFloat(row.costo);
+      const precioVenta   = parseFloat(row.precio_venta);
+      const imeiRaw       = String(row.imei || '').trim();
+      const notas         = String(row.notas || '').trim() || null;
+      const monedaRaw     = String(row.moneda || '').trim().toUpperCase();
+      const proveedorName = String(row.proveedor || '').trim();
+
+      const VALID_CURRENCIES = ['ARS', 'USD', 'USDT'];
+      const currency = VALID_CURRENCIES.includes(monedaRaw) ? monedaRaw : 'ARS';
 
       if (!modelo) { result.failed++; result.errors.push({ row: rowNum, reason: 'Falta "modelo"' }); continue; }
       if (!color)  { result.failed++; result.errors.push({ row: rowNum, reason: 'Falta "color"' }); continue; }
@@ -367,8 +372,16 @@ const bulkUpload = async (req, res) => {
           create: { name: modelo, color, storage: almac, tenantId },
         });
 
+        let supplierId = null;
+        if (proveedorName) {
+          const supplier = await prisma.supplier.findUnique({
+            where: { name_tenantId: { name: proveedorName, tenantId } },
+          });
+          if (supplier) supplierId = supplier.id;
+        }
+
         await prisma.inventoryItem.create({
-          data: { imei, condition, costPrice: costo, salePrice: precioVenta, notes: notas, accessories: [], productId: product.id, tenantId },
+          data: { imei, condition, costPrice: costo, salePrice: precioVenta, currency, notes: notas, accessories: [], productId: product.id, supplierId, tenantId },
         });
 
         result.loaded++;

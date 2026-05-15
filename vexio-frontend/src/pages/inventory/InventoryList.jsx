@@ -68,11 +68,11 @@ const BulkUploadModal = ({ onClose, onSuccess }) => {
 
   const downloadTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-      ['modelo', 'color', 'almacenamiento', 'condicion', 'costo', 'precio_venta', 'imei', 'notas'],
-      ['iPhone 14', 'Negro', '128GB', 'Nuevo', 700, 900, '', ''],
-      ['iPhone 13 Pro', 'Azul Sierra', '256GB', 'Como nuevo', 620, 820, '352999112345678', ''],
+      ['modelo', 'color', 'almacenamiento', 'condicion', 'costo', 'precio_venta', 'moneda', 'proveedor', 'imei', 'notas'],
+      ['iPhone 14', 'Negro', '128GB', 'Nuevo', 700, 900, 'ARS', 'Proveedor Ejemplo', '', ''],
+      ['iPhone 13 Pro', 'Azul Sierra', '256GB', 'Como nuevo', 620, 820, 'USD', 'Proveedor Ejemplo', '352999112345678', ''],
     ]);
-    ws['!cols'] = [14, 14, 14, 14, 10, 12, 20, 20].map((w) => ({ wch: w }));
+    ws['!cols'] = [14, 14, 14, 14, 10, 12, 8, 18, 20, 20].map((w) => ({ wch: w }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Plantilla');
     XLSX.writeFile(wb, 'plantilla-inventario.xlsx');
