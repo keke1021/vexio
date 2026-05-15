@@ -31,8 +31,8 @@ const StatCard = ({ label, value, accent }) => (
   </div>
 );
 
-const BalanceCard = ({ currency, income, expense }) => {
-  const net = income - expense;
+const BalanceCard = ({ currency, income, expense, initial = 0 }) => {
+  const net = initial + income - expense;
   const fmtVal = currency === 'ARS' ? fmt : fmtUsd;
   return (
     <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4"
@@ -61,32 +61,44 @@ const BalanceCard = ({ currency, income, expense }) => {
 };
 
 const OpenPanel = ({ onOpen, isPending }) => {
-  const [amount, setAmount] = useState('');
+  const [amountARS, setAmountARS] = useState('');
+  const [amountUSD, setAmountUSD] = useState('');
   const [notes, setNotes] = useState('');
 
   return (
     <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 max-w-sm"
       style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
       <p className="text-[11px] text-[#3B82F6] uppercase tracking-widest font-medium mb-4">Abrir caja</p>
-      <div className="mb-4">
-        <label className="block text-[13px] font-medium text-[#64748B] mb-2">
-          Monto inicial
-        </label>
-        <input
-          type="number"
-          placeholder="0"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          min="0"
-          step="100"
-          className="w-full bg-white border border-[#E2E8F0] rounded-lg px-4 py-2.5 text-[13px] text-[#0F172A]
-            placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-all"
-        />
+      <div className="flex gap-3 mb-4">
+        <div className="flex-1 min-w-0">
+          <label className="block text-[13px] font-medium text-[#64748B] mb-2">Monto inicial ARS</label>
+          <input
+            type="number"
+            placeholder="0"
+            value={amountARS}
+            onChange={(e) => setAmountARS(e.target.value)}
+            min="0"
+            step="100"
+            className="w-full bg-white border border-[#E2E8F0] rounded-lg px-4 py-2.5 text-[13px] text-[#0F172A]
+              placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-all"
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <label className="block text-[13px] font-medium text-[#64748B] mb-2">Monto inicial USD</label>
+          <input
+            type="number"
+            placeholder="0"
+            value={amountUSD}
+            onChange={(e) => setAmountUSD(e.target.value)}
+            min="0"
+            step="1"
+            className="w-full bg-white border border-[#E2E8F0] rounded-lg px-4 py-2.5 text-[13px] text-[#0F172A]
+              placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-all"
+          />
+        </div>
       </div>
       <div className="mb-5">
-        <label className="block text-[13px] font-medium text-[#64748B] mb-2">
-          Nota (opcional)
-        </label>
+        <label className="block text-[13px] font-medium text-[#64748B] mb-2">Nota (opcional)</label>
         <input
           type="text"
           placeholder="Ej: apertura turno mañana"
@@ -97,7 +109,11 @@ const OpenPanel = ({ onOpen, isPending }) => {
         />
       </div>
       <button
-        onClick={() => onOpen({ initialAmount: parseFloat(amount) || 0, notes: notes || undefined })}
+        onClick={() => onOpen({
+          initialAmountARS: parseFloat(amountARS) || 0,
+          initialAmountUSD: parseFloat(amountUSD) || 0,
+          notes: notes || undefined,
+        })}
         disabled={isPending}
         className="w-full bg-[#3B82F6] hover:bg-[#2563EB] text-white text-[13px] font-medium py-2.5 rounded-lg
           transition-colors disabled:opacity-40"
@@ -113,7 +129,7 @@ const ClosePanel = ({ summary, onClose, isPending, onCancel }) => {
 
   const income  = summary?.income ?? 0;
   const expense = summary?.expense ?? 0;
-  const initial = summary?.session?.initialAmount ?? 0;
+  const initial = summary?.session?.initialAmountARS ?? 0;
   const balance = initial + income - expense;
 
   return (
@@ -315,8 +331,18 @@ const CashMain = () => {
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-            <BalanceCard currency="ARS" income={arsData.income} expense={arsData.expense} />
-            <BalanceCard currency="USD" income={usdData.income} expense={usdData.expense} />
+            <BalanceCard
+              currency="ARS"
+              income={arsData.income}
+              expense={arsData.expense}
+              initial={summary?.session?.initialAmountARS ?? 0}
+            />
+            <BalanceCard
+              currency="USD"
+              income={usdData.income}
+              expense={usdData.expense}
+              initial={summary?.session?.initialAmountUSD ?? 0}
+            />
           </div>
 
           {expense > 0 && (
