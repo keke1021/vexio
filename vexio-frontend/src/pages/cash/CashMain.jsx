@@ -232,10 +232,12 @@ const CashMain = () => {
   const byPayment  = summary?.byPaymentMethod ?? {};
   const byCurrency = summary?.byCurrency ?? {};
 
-  const arsData = byCurrency['ARS'] ?? { income: 0, expense: 0 };
+  const arsData = byCurrency['ARS'] ?? { income: 0, expense: 0, sales: 0, manualIncome: 0 };
   const usdData = {
-    income:  (byCurrency['USD']?.income  ?? 0) + (byCurrency['USDT']?.income  ?? 0),
-    expense: (byCurrency['USD']?.expense ?? 0) + (byCurrency['USDT']?.expense ?? 0),
+    income:       (byCurrency['USD']?.income       ?? 0) + (byCurrency['USDT']?.income       ?? 0),
+    expense:      (byCurrency['USD']?.expense      ?? 0) + (byCurrency['USDT']?.expense      ?? 0),
+    sales:        (byCurrency['USD']?.sales        ?? 0) + (byCurrency['USDT']?.sales        ?? 0),
+    manualIncome: (byCurrency['USD']?.manualIncome ?? 0) + (byCurrency['USDT']?.manualIncome ?? 0),
   };
 
   return (
@@ -306,10 +308,25 @@ const CashMain = () => {
 
       {session && (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-            <StatCard label="Monto inicial"     value={fmt(session.initialAmount)} />
-            <StatCard label="Ventas"            value={fmt(salesTotal)} accent="text-[#3B82F6]" />
-            <StatCard label="Ingresos manuales" value={fmt(income - salesTotal)} accent="text-emerald-600" />
+          <div className="mb-6 space-y-3">
+            <div>
+              <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-widest mb-2">ARS</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <StatCard label="Monto inicial"    value={fmt(session.initialAmountARS ?? 0)} />
+                <StatCard label="Ventas"           value={fmt(arsData.sales)}        accent="text-[#3B82F6]" />
+                <StatCard label="Ing. manuales"    value={fmt(arsData.manualIncome)} accent="text-emerald-600" />
+                <StatCard label="Egresos"          value={fmt(arsData.expense)}      accent="text-red-500" />
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-widest mb-2">USD</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <StatCard label="Monto inicial" value={fmtUsd(session.initialAmountUSD ?? 0)} />
+                <StatCard label="Ventas"        value={fmtUsd(usdData.sales)}        accent="text-[#3B82F6]" />
+                <StatCard label="Ing. manuales" value={fmtUsd(usdData.manualIncome)} accent="text-emerald-600" />
+                <StatCard label="Egresos"       value={fmtUsd(usdData.expense)}      accent="text-red-500" />
+              </div>
+            </div>
           </div>
 
           {Object.keys(byPayment).length > 0 && (

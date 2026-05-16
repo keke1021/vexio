@@ -276,7 +276,7 @@ const getSummary = async (req, res) => {
       return res.json({ isOpen: false, session: null, income: 0, expense: 0, salesTotal: 0, balance: 0, byPaymentMethod: {}, byCurrency: {} });
     }
 
-    const [byType, byPayment, byCurrencyRaw, salesAgg] = await Promise.all([
+    const [byType, byPayment, byCurrencyRaw, salesByCurRaw, manualByCurRaw] = await Promise.all([
       prisma.cashMovement.groupBy({
         by: ['type'],
         where: { sessionId: session.id },
@@ -292,15 +292,20 @@ const getSummary = async (req, res) => {
         where: { sessionId: session.id },
         _sum: { amount: true },
       }),
-      prisma.cashMovement.aggregate({
+      prisma.cashMovement.groupBy({
+        by: ['currency'],
         where: { sessionId: session.id, type: 'INCOME', saleId: { not: null } },
+        _sum: { amount: true },
+      }),
+      prisma.cashMovement.groupBy({
+        by: ['currency'],
+        where: { sessionId: session.id, type: 'INCOME', saleId: null },
         _sum: { amount: true },
       }),
     ]);
 
     const income     = parseFloat(byType.find((b) => b.type === 'INCOME')?._sum.amount  ?? 0);
     const expense    = parseFloat(byType.find((b) => b.type === 'EXPENSE')?._sum.amount ?? 0);
-    const salesTotal = parseFloat(salesAgg._sum.amount ?? 0);
 
     const byPaymentMethod = {};
     for (const row of byPayment) {
@@ -314,10 +319,21 @@ const getSummary = async (req, res) => {
     const byCurrency = {};
     for (const row of byCurrencyRaw) {
       const cur = row.currency ?? 'ARS';
-      if (!byCurrency[cur]) byCurrency[cur] = { income: 0, expense: 0 };
-      byCurrency[cur][row.type === 'INCOME' ? 'income' : 'expense'] =
-        parseFloat(row._sum.amount ?? 0);
+      if (!byCurrency[cur]) byCurrency[cur] = { income: 0, expense: 0, sales: 0, manualIncome: 0 };
+      byCurrency[cur][row.type === 'INCOME' ? 'income' : 'expense'] = parseFloat(row._sum.amount ?? 0);
     }
+    for (const row of salesByCurRaw) {
+      const cur = row.currency ?? 'ARS';
+      if (!byCurrency[cur]) byCurrency[cur] = { income: 0, expense: 0, sales: 0, manualIncome: 0 };
+      byCurrency[cur].sales = parseFloat(row._sum.amount ?? 0);
+    }
+    for (const row of manualByCurRaw) {
+      const cur = row.currency ?? 'ARS';
+      if (!byCurrency[cur]) byCurrency[cur] = { income: 0, expense: 0, sales: 0, manualIncome: 0 };
+      byCurrency[cur].manualIncome = parseFloat(row._sum.amount ?? 0);
+    }
+
+    const salesTotal = Object.values(byCurrency).reduce((s, v) => s + (v.sales ?? 0), 0);
 
     res.json({
       isOpen: !session.closedAt,
