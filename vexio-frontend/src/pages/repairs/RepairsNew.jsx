@@ -160,7 +160,7 @@ const RepairsNew = () => {
             </div>
             <div>
               <Label>Presupuesto</Label>
-              <Input type="number" placeholder="0" value={form.budget} onChange={set('budget')} min="0" step="100" />
+              <Input type="number" placeholder="0" value={form.budget} onChange={set('budget')} min="0" step="any" />
             </div>
             <div>
               <Label>Entrega estimada</Label>
