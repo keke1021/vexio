@@ -60,6 +60,84 @@ const BalanceCard = ({ currency, income, expense, initial = 0 }) => {
   );
 };
 
+const SaleDetailModal = ({ saleId, onClose }) => {
+  const { data: sale, isLoading } = useQuery({
+    queryKey: ['pos-sale', saleId],
+    queryFn: () => api.get(`/pos/sales/${saleId}`).then((r) => r.data),
+    enabled: !!saleId,
+    staleTime: 60_000,
+  });
+
+  const fmtAmount = (n, cur) => (cur && cur !== 'ARS' ? fmtUsd(n) : fmt(n));
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl w-full max-w-md shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#E2E8F0]">
+          <p className="text-[11px] text-[#3B82F6] uppercase tracking-widest font-medium">Detalle de venta</p>
+          <button onClick={onClose} className="text-[#94A3B8] hover:text-[#64748B] text-xl leading-none">×</button>
+        </div>
+
+        <div className="px-5 py-4">
+          {isLoading && (
+            <p className="text-center text-[13px] text-[#CBD5E1] py-6">Cargando...</p>
+          )}
+
+          {sale && (
+            <>
+              <div className="space-y-2 mb-4">
+                {sale.items?.map((si) => (
+                  <div key={si.id} className="border border-[#E2E8F0] rounded-lg px-4 py-3">
+                    <p className="text-[13px] font-medium text-[#0F172A]">
+                      {[si.inventoryItem?.product?.name, si.inventoryItem?.product?.color, si.inventoryItem?.product?.storage]
+                        .filter(Boolean).join(' ')}
+                    </p>
+                    {si.inventoryItem?.imei && (
+                      <p className="text-[11px] text-[#94A3B8] mt-0.5 font-mono">IMEI: {si.inventoryItem.imei}</p>
+                    )}
+                    <p className="text-[13px] font-semibold mt-1.5 text-[#0F172A]">
+                      {fmtAmount(si.salePrice, sale.currency)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2 text-[13px] border-t border-[#E2E8F0] pt-3">
+                <div className="flex justify-between">
+                  <span className="text-[#94A3B8]">Total</span>
+                  <span className="font-medium text-[#0F172A]">
+                    {fmtAmount(sale.total, sale.currency)}
+                    <span className="text-[#CBD5E1] mx-1">·</span>
+                    <span className="text-[#64748B]">{PAYMENT_LABELS[sale.paymentMethod] ?? sale.paymentMethod}</span>
+                  </span>
+                </div>
+                {sale.customerName && (
+                  <div className="flex justify-between">
+                    <span className="text-[#94A3B8]">Cliente</span>
+                    <span className="text-[#0F172A]">
+                      {sale.customerName}{sale.customerPhone ? ` · ${sale.customerPhone}` : ''}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-[#94A3B8]">Vendedor</span>
+                  <span className="text-[#0F172A]">{sale.seller?.name ?? '—'}</span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const OpenPanel = ({ onOpen, isPending }) => {
   const [amountARS, setAmountARS] = useState('');
   const [amountUSD, setAmountUSD] = useState('');
@@ -192,6 +270,7 @@ const CashMain = () => {
 
   const [showClose, setShowClose] = useState(false);
   const [error, setError] = useState('');
+  const [selectedSaleId, setSelectedSaleId] = useState(null);
 
   const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ['cash-summary'],
@@ -405,7 +484,11 @@ const CashMain = () => {
                   </thead>
                   <tbody>
                     {movements.map((m) => (
-                      <tr key={m.id} className="border-b border-[#E2E8F0]">
+                      <tr
+                        key={m.id}
+                        className={`border-b border-[#E2E8F0] transition-colors ${m.saleId ? 'cursor-pointer hover:bg-[#F8FAFC]' : ''}`}
+                        onClick={m.saleId ? () => setSelectedSaleId(m.saleId) : undefined}
+                      >
                         <td className="px-4 py-3.5">
                           <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${
                             m.type === 'INCOME' ? 'text-emerald-600' : 'text-red-500'
@@ -424,7 +507,7 @@ const CashMain = () => {
                         <td className={`px-4 py-3.5 text-right font-medium tabular-nums ${
                           m.type === 'INCOME' ? 'text-emerald-600' : 'text-red-500'
                         }`}>
-                          {m.type === 'INCOME' ? '+' : '−'}{fmt(m.amount)}
+                          {m.type === 'INCOME' ? '+' : '−'}{(m.currency && m.currency !== 'ARS') ? fmtUsd(m.amount) : fmt(m.amount)}
                         </td>
                         <td className="px-4 py-3.5">
                           {(() => {
@@ -455,6 +538,9 @@ const CashMain = () => {
             </div>
           </div>
         </>
+      )}
+      {selectedSaleId && (
+        <SaleDetailModal saleId={selectedSaleId} onClose={() => setSelectedSaleId(null)} />
       )}
     </div>
   );
