@@ -166,8 +166,9 @@ const getInventoryReport = async (req, res) => {
   try {
     const { tenantId } = req.user;
 
-    const [agg, byCondition, products] = await Promise.all([
-      prisma.inventoryItem.aggregate({
+    const [byCurrencyRaw, byCondition, products] = await Promise.all([
+      prisma.inventoryItem.groupBy({
+        by: ['currency'],
         where: { tenantId, status: 'AVAILABLE' },
         _sum: { costPrice: true, salePrice: true },
         _count: { id: true },
@@ -186,6 +187,17 @@ const getInventoryReport = async (req, res) => {
       }),
     ]);
 
+    const byCurrency = {};
+    let totalItems = 0;
+    for (const row of byCurrencyRaw) {
+      byCurrency[row.currency] = {
+        costValue: parseFloat(row._sum.costPrice ?? 0),
+        saleValue: parseFloat(row._sum.salePrice ?? 0),
+        count:     row._count.id,
+      };
+      totalItems += row._count.id;
+    }
+
     const alerts = products
       .filter((p) => p._count.items <= p.minStock)
       .map((p) => ({
@@ -198,14 +210,13 @@ const getInventoryReport = async (req, res) => {
       .slice(0, 10);
 
     res.json({
-      totalItems:     agg._count.id,
-      totalCostValue: parseFloat(agg._sum.costPrice  ?? 0),
-      totalSaleValue: parseFloat(agg._sum.salePrice  ?? 0),
+      totalItems,
+      byCurrency,
       byCondition: byCondition.map((c) => ({
         condition: c.condition,
         count:     c._count.id,
-        costValue: parseFloat(c._sum.costPrice  ?? 0),
-        saleValue: parseFloat(c._sum.salePrice  ?? 0),
+        costValue: parseFloat(c._sum.costPrice ?? 0),
+        saleValue: parseFloat(c._sum.salePrice ?? 0),
       })),
       alerts,
     });

@@ -33,6 +33,9 @@ const PERIODS = [
 const fmt = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
 
+const fmtUSD = (n) =>
+  `USD ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(n ?? 0)}`;
+
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) : '';
 
@@ -129,10 +132,14 @@ const exportToExcel = ({ salesData, productsData, inventoryData, repairsData, ca
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(prodRows), 'Productos');
 
+  const invByCur = inventoryData?.byCurrency ?? {};
   const invRows = [
     ['Total equipos disponibles', inventoryData?.totalItems ?? 0],
-    ['Valor de costo (stock)', inventoryData?.totalCostValue ?? 0],
-    ['Valor de venta (stock)', inventoryData?.totalSaleValue ?? 0],
+    [],
+    ['Moneda', 'Valor de costo', 'Valor de venta', 'Equipos'],
+    ...['ARS', 'USD', 'USDT'].filter((c) => invByCur[c]).map((c) => [
+      c, invByCur[c].costValue, invByCur[c].saleValue, invByCur[c].count,
+    ]),
     [],
     ['Condición', 'Cantidad', 'Valor costo'],
     ...(inventoryData?.byCondition ?? []).map((c) => [
@@ -427,10 +434,40 @@ const ReportsPage = () => {
         {inventoryQ.isLoading && <LoadingRow />}
         {!inventoryQ.isLoading && inventoryQ.data && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
               <StatCard label="Equipos disponibles" value={inventoryQ.data.totalItems} />
-              <StatCard label="Valor de costo"      value={fmt(inventoryQ.data.totalCostValue)} />
-              <StatCard label="Valor de venta"      value={fmt(inventoryQ.data.totalSaleValue)} accent="text-[#3B82F6]" />
+
+              <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+                <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.15em] mb-3">Valor de costo</p>
+                {['ARS', 'USD', 'USDT'].map((cur) => {
+                  const v = inventoryQ.data.byCurrency?.[cur];
+                  if (!v) return null;
+                  return (
+                    <div key={cur} className="mb-2 last:mb-0">
+                      <p className="text-[10px] text-[#CBD5E1] mb-0.5">{cur}</p>
+                      <p className="text-[18px] font-semibold tracking-tight text-[#0F172A]">
+                        {cur === 'ARS' ? fmt(v.costValue) : fmtUSD(v.costValue)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+                <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.15em] mb-3">Valor de venta</p>
+                {['ARS', 'USD', 'USDT'].map((cur) => {
+                  const v = inventoryQ.data.byCurrency?.[cur];
+                  if (!v) return null;
+                  return (
+                    <div key={cur} className="mb-2 last:mb-0">
+                      <p className="text-[10px] text-[#CBD5E1] mb-0.5">{cur}</p>
+                      <p className="text-[18px] font-semibold tracking-tight text-[#3B82F6]">
+                        {cur === 'ARS' ? fmt(v.saleValue) : fmtUSD(v.saleValue)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {inventoryQ.data.byCondition.length > 0 && (
