@@ -268,7 +268,7 @@ const AdminTickets = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-8">
+        <div className="flex-1 overflow-y-auto px-6 pb-8 dark:bg-[#0F172A]">
           {isLoading ? (
             <p className="text-[#CBD5E1] text-[13px]">Cargando...</p>
           ) : tickets.length === 0 ? (
@@ -281,15 +281,15 @@ const AdminTickets = () => {
                   onClick={() => setSelected(selected === t.id ? null : t.id)}
                   className={`w-full text-left border rounded-xl px-5 py-4 transition-colors ${
                     selected === t.id
-                      ? 'border-violet-300 bg-violet-50'
-                      : 'border-[#E2E8F0] bg-white hover:border-[#3B82F6]/30 hover:bg-[#EFF6FF]'
+                      ? 'border-violet-300 bg-violet-50 dark:bg-[#1E3A5F] dark:border-[#3B82F6]/50'
+                      : 'border-[#E2E8F0] dark:border-[#334155] bg-white dark:bg-[#1E293B] hover:border-[#3B82F6]/30 hover:bg-[#EFF6FF] dark:hover:bg-[#1E3A5F]/50'
                   }`}
                   style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="text-[13px] font-medium text-[#0F172A] truncate">{t.title}</p>
-                      <p className="text-[11px] text-[#94A3B8] mt-0.5">
+                      <p className="text-[13px] font-medium text-[#0F172A] dark:text-[#F1F5F9] truncate">{t.title}</p>
+                      <p className="text-[11px] text-[#94A3B8] dark:text-[#64748B] mt-0.5">
                         {t.tenant?.name} · {CATEGORY_LABELS[t.category] ?? t.category}
                         {t._count?.replies > 0 && <span className="ml-1.5 text-violet-500">· {t._count.replies}r</span>}
                       </p>
@@ -301,7 +301,7 @@ const AdminTickets = () => {
                       </span>
                     </div>
                   </div>
-                  <p className="text-[11px] text-[#CBD5E1] mt-1.5">{fmtTime(t.createdAt)}</p>
+                  <p className="text-[11px] text-[#CBD5E1] dark:text-[#475569] mt-1.5">{fmtTime(t.createdAt)}</p>
                 </button>
               ))}
             </div>
