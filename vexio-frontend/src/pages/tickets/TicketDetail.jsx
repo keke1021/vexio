@@ -116,10 +116,10 @@ const TicketDetail = () => {
         <span className="text-[#64748B] truncate">{ticket.title}</span>
       </div>
 
-      <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-5 mb-6"
+      <div className="bg-white dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] rounded-xl px-5 py-5 mb-6"
         style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
         <div className="flex items-start justify-between gap-4 mb-3">
-          <h1 className="text-[18px] font-bold tracking-tight text-[#0F172A]">{ticket.title}</h1>
+          <h1 className="text-[18px] font-bold tracking-tight text-[#0F172A] dark:text-[#F1F5F9]">{ticket.title}</h1>
           <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium shrink-0 ${statusCfg.cls}`}>
             {statusCfg.label}
           </span>
@@ -157,12 +157,12 @@ const TicketDetail = () => {
       </div>
 
       <div className="space-y-3 mb-6">
-        <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-5 py-4">
+        <div className="bg-[#F8FAFC] dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#334155] rounded-xl px-5 py-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[12px] font-medium text-[#64748B]">{ticket.user?.name ?? 'Usuario'}</span>
-            <span className="text-[11px] text-[#CBD5E1]">{fmtTime(ticket.createdAt)}</span>
+            <span className="text-[12px] font-medium text-[#64748B] dark:text-[#94A3B8]">{ticket.user?.name ?? 'Usuario'}</span>
+            <span className="text-[11px] text-[#CBD5E1] dark:text-[#475569]">{fmtTime(ticket.createdAt)}</span>
           </div>
-          <p className="text-[13px] text-[#0F172A] whitespace-pre-wrap">{ticket.description}</p>
+          <p className="text-[13px] text-[#0F172A] dark:text-[#F1F5F9] whitespace-pre-wrap">{ticket.description}</p>
           {ticket.attachments?.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-3">
               {ticket.attachments.map((a, i) => (
@@ -180,22 +180,22 @@ const TicketDetail = () => {
             key={r.id}
             className={`rounded-xl px-5 py-4 ${
               r.isAdmin
-                ? 'bg-[#EFF6FF] border border-[#3B82F6]/20 ml-4'
-                : 'bg-[#F8FAFC] border border-[#E2E8F0]'
+                ? 'bg-[#EFF6FF] dark:bg-[#1E3A5F] border border-[#3B82F6]/20 ml-4'
+                : 'bg-[#F8FAFC] dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#334155]'
             }`}
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className="text-[12px] font-medium text-[#64748B]">{r.user?.name ?? '—'}</span>
+                <span className="text-[12px] font-medium text-[#64748B] dark:text-[#94A3B8]">{r.user?.name ?? '—'}</span>
                 {r.isAdmin && (
                   <span className="text-[10px] font-medium text-[#3B82F6] bg-[#3B82F6]/10 px-1.5 py-0.5 rounded">
                     Soporte
                   </span>
                 )}
               </div>
-              <span className="text-[11px] text-[#CBD5E1]">{fmtTime(r.createdAt)}</span>
+              <span className="text-[11px] text-[#CBD5E1] dark:text-[#475569]">{fmtTime(r.createdAt)}</span>
             </div>
-            <p className="text-[13px] text-[#0F172A] whitespace-pre-wrap">{r.message}</p>
+            <p className="text-[13px] text-[#0F172A] dark:text-[#F1F5F9] whitespace-pre-wrap">{r.message}</p>
             {r.attachments?.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-3">
                 {r.attachments.map((a, i) => (
@@ -212,16 +212,22 @@ const TicketDetail = () => {
       </div>
 
       {canReply ? (
-        <form onSubmit={handleReplySubmit} className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4"
+        <form onSubmit={handleReplySubmit} className="bg-white dark:bg-[#1E293B] border border-[#E2E8F0] dark:border-[#334155] rounded-xl px-5 py-4"
           style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
           <textarea
             rows={4}
             placeholder="Escribí tu respuesta..."
             value={reply}
             onChange={(e) => setReply(e.target.value)}
-            className="bg-transparent text-[13px] text-[#0F172A] placeholder-[#CBD5E1] focus:outline-none w-full resize-none"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleReplySubmit(e);
+              }
+            }}
+            className="bg-transparent text-[13px] text-[#0F172A] dark:text-[#F1F5F9] placeholder-[#CBD5E1] focus:outline-none w-full resize-none"
           />
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#E2E8F0]">
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#E2E8F0] dark:border-[#334155]">
             <div className="flex items-center gap-2">
               <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleReplyFiles} />
               {replyFiles.length < 3 && (
