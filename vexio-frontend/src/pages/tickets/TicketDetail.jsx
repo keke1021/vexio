@@ -44,6 +44,7 @@ const TicketDetail = () => {
     queryKey: ['ticket', id],
     queryFn: () => api.get(`/tickets/${id}`).then((r) => r.data),
     staleTime: 15_000,
+    refetchInterval: 10_000,
   });
 
   const replyMutation = useMutation({
