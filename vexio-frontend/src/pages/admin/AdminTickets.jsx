@@ -88,15 +88,15 @@ const TicketPanel = ({ ticketId, onClose }) => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-start justify-between px-5 py-4 border-b border-[#E2E8F0]">
+      <div className="flex items-start justify-between px-5 py-4 border-b border-[#E2E8F0] dark:border-[#334155]">
         <div className="min-w-0 pr-4">
-          <p className="text-[14px] font-semibold text-[#0F172A] leading-snug">{ticket.title}</p>
+          <p className="text-[14px] font-semibold text-[#0F172A] dark:text-[#F1F5F9] leading-snug">{ticket.title}</p>
           <p className="text-[11px] text-[#94A3B8] mt-0.5">{ticket.tenant?.name} · {CATEGORY_LABELS[ticket.category] ?? ticket.category}</p>
         </div>
         <button onClick={onClose} className="text-[#CBD5E1] hover:text-[#94A3B8] text-[18px] leading-none transition-colors shrink-0">×</button>
       </div>
 
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-[#E2E8F0] bg-[#F8FAFC]">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-[#E2E8F0] dark:border-[#334155] bg-[#F8FAFC] dark:bg-[#0F172A]">
         <Badge config={STATUS_CONFIG} value={ticket.status} />
         <span className={`text-[11px] font-medium ${PRIORITY_CONFIG[ticket.priority]?.cls ?? 'text-[#94A3B8]'}`}>
           {PRIORITY_CONFIG[ticket.priority]?.label ?? ticket.priority}
@@ -124,12 +124,12 @@ const TicketPanel = ({ ticketId, onClose }) => {
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-        <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-4 py-3">
+        <div className="bg-[#F8FAFC] dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#334155] rounded-xl px-4 py-3">
           <div className="flex justify-between mb-1.5">
-            <span className="text-[12px] font-medium text-[#64748B]">{ticket.user?.name}</span>
-            <span className="text-[11px] text-[#CBD5E1]">{fmtTime(ticket.createdAt)}</span>
+            <span className="text-[12px] font-medium text-[#64748B] dark:text-[#94A3B8]">{ticket.user?.name}</span>
+            <span className="text-[11px] text-[#CBD5E1] dark:text-[#475569]">{fmtTime(ticket.createdAt)}</span>
           </div>
-          <p className="text-[13px] text-[#0F172A] whitespace-pre-wrap">{ticket.description}</p>
+          <p className="text-[13px] text-[#0F172A] dark:text-[#F1F5F9] whitespace-pre-wrap">{ticket.description}</p>
           {ticket.attachments?.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {ticket.attachments.map((a, i) => (
@@ -147,33 +147,39 @@ const TicketPanel = ({ ticketId, onClose }) => {
             key={r.id}
             className={`rounded-xl px-4 py-3 ${
               r.isAdmin
-                ? 'bg-violet-50 border border-violet-200 ml-3'
-                : 'bg-[#F8FAFC] border border-[#E2E8F0]'
+                ? 'bg-[#EFF6FF] dark:bg-[#1E3A5F] border border-[#3B82F6]/20 ml-3'
+                : 'bg-[#F8FAFC] dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#334155]'
             }`}
           >
             <div className="flex justify-between mb-1.5">
               <div className="flex items-center gap-1.5">
-                <span className="text-[12px] font-medium text-[#64748B]">{r.user?.name}</span>
+                <span className="text-[12px] font-medium text-[#64748B] dark:text-[#94A3B8]">{r.user?.name}</span>
                 {r.isAdmin && (
-                  <span className="text-[10px] text-violet-600 bg-violet-100 px-1.5 py-0.5 rounded">Soporte</span>
+                  <span className="text-[10px] font-medium text-[#3B82F6] bg-[#3B82F6]/10 px-1.5 py-0.5 rounded">Soporte</span>
                 )}
               </div>
-              <span className="text-[11px] text-[#CBD5E1]">{fmtTime(r.createdAt)}</span>
+              <span className="text-[11px] text-[#CBD5E1] dark:text-[#475569]">{fmtTime(r.createdAt)}</span>
             </div>
-            <p className="text-[13px] text-[#0F172A] whitespace-pre-wrap">{r.message}</p>
+            <p className="text-[13px] text-[#0F172A] dark:text-[#F1F5F9] whitespace-pre-wrap">{r.message}</p>
           </div>
         ))}
       </div>
 
       {ticket.status !== 'RESUELTO' && (
-        <form onSubmit={handleSubmit} className="px-5 py-4 border-t border-[#E2E8F0] bg-white">
+        <form onSubmit={handleSubmit} className="px-5 py-4 border-t border-[#E2E8F0] dark:border-[#334155] bg-white dark:bg-[#1E293B]">
           <textarea
             rows={3}
             placeholder="Responder..."
             value={reply}
             onChange={(e) => setReply(e.target.value)}
-            className="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#0F172A]
-              placeholder-[#CBD5E1] focus:outline-none focus:border-violet-400 transition-colors w-full resize-none"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
+            className="bg-transparent border border-[#E2E8F0] dark:border-[#334155] rounded-lg px-3 py-2 text-[13px] text-[#0F172A] dark:text-[#F1F5F9]
+              placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-colors w-full resize-none"
           />
           <div className="flex items-center justify-between mt-2">
             <div className="flex items-center gap-2">
@@ -304,7 +310,7 @@ const AdminTickets = () => {
       </div>
 
       {selected && (
-        <div className="w-1/2 overflow-hidden flex flex-col bg-white border-l border-[#E2E8F0]">
+        <div className="w-1/2 overflow-hidden flex flex-col bg-white dark:bg-[#1E293B] border-l border-[#E2E8F0] dark:border-[#334155]">
           <TicketPanel ticketId={selected} onClose={() => setSelected(null)} />
         </div>
       )}
