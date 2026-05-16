@@ -131,30 +131,50 @@ const createSale = async (req, res) => {
       });
     }
 
-    // Construir mapa de costo por item para el snapshot
-    const costMap = Object.fromEntries(inventoryItems.map((i) => [i.id, parseFloat(i.costPrice)]));
+    // Construir mapas de costo y precio por item desde la DB (no confiar en el frontend)
+    const saleCurr = ['ARS', 'USD', 'USDT'].includes(currency) ? currency : 'ARS';
+    const rate     = exchangeRate ? parseFloat(exchangeRate) : null;
 
-    // El total lo calcula el backend (no confiar en el frontend)
-    const total = items.reduce((sum, i) => sum + parseFloat(i.salePrice), 0);
+    const costMap  = {};
+    const priceMap = {};
+    for (const dbItem of inventoryItems) {
+      const dbPrice = parseFloat(dbItem.salePrice);
+      const itemCur = dbItem.currency ?? 'ARS';
+      costMap[dbItem.id] = parseFloat(dbItem.costPrice);
+
+      if (itemCur === saleCurr) {
+        priceMap[dbItem.id] = dbPrice;
+      } else if (itemCur !== 'ARS' && saleCurr === 'ARS') {
+        // USD/USDT → ARS: multiplicar por TC
+        priceMap[dbItem.id] = rate ? Math.round(dbPrice * rate) : dbPrice;
+      } else if (itemCur === 'ARS' && saleCurr !== 'ARS') {
+        // ARS → USD/USDT: dividir por TC
+        priceMap[dbItem.id] = rate ? +(dbPrice / rate).toFixed(2) : dbPrice;
+      } else {
+        priceMap[dbItem.id] = dbPrice; // USD ↔ USDT (1:1)
+      }
+    }
+
+    const total = Object.values(priceMap).reduce((sum, p) => sum + p, 0);
 
     const sale = await prisma.$transaction(async (tx) => {
       const created = await tx.sale.create({
         data: {
           total,
           paymentMethod,
-          currency: ['ARS', 'USD', 'USDT'].includes(currency) ? currency : 'ARS',
+          currency: saleCurr,
           customerName:  customerName  || null,
           customerPhone: customerPhone || null,
           notes:         notes         || null,
-          exchangeRate:  exchangeRate  ? parseFloat(exchangeRate) : null,
+          exchangeRate:  rate,
           exchangeType:  exchangeType && ['BLUE', 'USDT', 'NONE'].includes(exchangeType) ? exchangeType : null,
           sellerId: userId,
           tenantId,
           items: {
-            create: items.map((i) => ({
-              salePrice: parseFloat(i.salePrice),
-              costPrice: costMap[i.inventoryItemId],
-              inventoryItemId: i.inventoryItemId,
+            create: itemIds.map((id) => ({
+              salePrice:       priceMap[id],
+              costPrice:       costMap[id],
+              inventoryItemId: id,
             })),
           },
         },
@@ -180,8 +200,8 @@ const createSale = async (req, res) => {
           data: {
             type: 'INCOME',
             amount: total,
-            currency: ['ARS', 'USD', 'USDT'].includes(currency) ? currency : 'ARS',
-            exchangeRate: exchangeRate ? parseFloat(exchangeRate) : null,
+            currency: saleCurr,
+            exchangeRate: rate,
             description: `Venta de ${itemIds.length} equipo${itemIds.length !== 1 ? 's' : ''}`,
             paymentMethod,
             sessionId: openSession.id,
