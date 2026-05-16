@@ -135,6 +135,11 @@ const createSale = async (req, res) => {
     const saleCurr = ['ARS', 'USD', 'USDT'].includes(currency) ? currency : 'ARS';
     const rate     = exchangeRate ? parseFloat(exchangeRate) : null;
 
+    const needsConversion = inventoryItems.some((i) => (i.currency ?? 'ARS') !== saleCurr);
+    if (needsConversion && !rate) {
+      return res.status(400).json({ message: 'Se requiere tipo de cambio para convertir entre monedas.' });
+    }
+
     const costMap  = {};
     const priceMap = {};
     for (const dbItem of inventoryItems) {
