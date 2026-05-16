@@ -3,7 +3,7 @@ const multer  = require('multer');
 const path    = require('path');
 const crypto  = require('crypto');
 const { authenticate, authorize } = require('../middlewares/auth.middleware');
-const { createTicket, getTickets, getTicketById, addReply, updateStatus } = require('../controllers/tickets.controller');
+const { createTicket, getTickets, getTicketById, addReply, updateStatus, streamTicket } = require('../controllers/tickets.controller');
 
 const router = express.Router();
 
@@ -23,6 +23,9 @@ const upload = multer({
     else cb(new Error('Solo se aceptan imágenes.'), false);
   },
 });
+
+// SSE: antes de authenticate porque EventSource no puede enviar Authorization header
+router.get('/tickets/:id/stream', streamTicket);
 
 router.use(authenticate);
 

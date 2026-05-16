@@ -1,6 +1,51 @@
 const { PrismaClient } = require('@prisma/client');
+const jwt = require('jsonwebtoken');
 
 const prisma = new PrismaClient();
+
+// ─── SSE registry ─────────────────────────────────────────────────────────────
+
+const sseClients = new Map(); // ticketId → Set<res>
+
+const notifySseClients = (ticketId) => {
+  sseClients.get(ticketId)?.forEach((res) => {
+    res.write('event: reply\ndata: {}\n\n');
+  });
+};
+
+/**
+ * GET /api/tickets/:id/stream
+ * SSE: push instantáneo cuando llega una reply.
+ * Auth via ?token= porque EventSource no soporta headers custom.
+ */
+const streamTicket = (req, res) => {
+  const { id } = req.params;
+  const { token } = req.query;
+
+  try {
+    jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    return res.status(401).end();
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  res.write('event: connected\ndata: {}\n\n');
+
+  // Heartbeat cada 30s para mantener la conexión viva a través de proxies
+  const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 30_000);
+
+  if (!sseClients.has(id)) sseClients.set(id, new Set());
+  sseClients.get(id).add(res);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseClients.get(id)?.delete(res);
+  });
+};
 
 const VALID_CATEGORIES = ['ERROR_SISTEMA', 'CONSULTA_GENERAL', 'PROBLEMA_MODULO', 'SUGERENCIA', 'FACTURACION'];
 const VALID_PRIORITIES = ['BAJA', 'MEDIA', 'ALTA'];
@@ -167,6 +212,7 @@ const addReply = async (req, res) => {
       });
     }
 
+    notifySseClients(ticketId);
     res.status(201).json(reply);
   } catch (error) {
     console.error('[tickets:addReply]', error);
@@ -214,4 +260,4 @@ const updateStatus = async (req, res) => {
   }
 };
 
-module.exports = { createTicket, getTickets, getTicketById, addReply, updateStatus };
+module.exports = { createTicket, getTickets, getTicketById, addReply, updateStatus, streamTicket };

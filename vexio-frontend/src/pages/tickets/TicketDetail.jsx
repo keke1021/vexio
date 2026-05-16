@@ -1,8 +1,8 @@
-﻿import { useRef, useState } from 'react';
+﻿import { useRef, useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
-import api from '../../api/axios';
+import api, { tokenStore } from '../../api/axios';
 
 const STATUS_CONFIG = {
   ABIERTO:    { label: 'Abierto',    cls: 'text-[#3B82F6] bg-[#EFF6FF]' },
@@ -44,8 +44,23 @@ const TicketDetail = () => {
     queryKey: ['ticket', id],
     queryFn: () => api.get(`/tickets/${id}`).then((r) => r.data),
     staleTime: 15_000,
-    refetchInterval: 10_000,
   });
+
+  // SSE: actualización instantánea cuando el otro lado envía una reply
+  useEffect(() => {
+    const token = tokenStore.getAccessToken();
+    if (!token) return;
+
+    const es = new EventSource(
+      `${api.defaults.baseURL}/tickets/${id}/stream?token=${encodeURIComponent(token)}`
+    );
+
+    es.addEventListener('reply', () => {
+      queryClient.invalidateQueries({ queryKey: ['ticket', id] });
+    });
+
+    return () => es.close();
+  }, [id, queryClient, user]);
 
   const replyMutation = useMutation({
     mutationFn: (fd) => api.post(`/tickets/${id}/reply`, fd).then((r) => r.data),
