@@ -381,6 +381,7 @@ const CashMain = () => {
                       <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Descripción</th>
                       <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Medio</th>
                       <th className="text-right px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Monto</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Moneda</th>
                       <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Hora</th>
                       <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Usuario</th>
                     </tr>
@@ -407,6 +408,21 @@ const CashMain = () => {
                           m.type === 'INCOME' ? 'text-emerald-600' : 'text-red-500'
                         }`}>
                           {m.type === 'INCOME' ? '+' : '−'}{fmt(m.amount)}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {(() => {
+                            const cur = m.currency ?? 'ARS';
+                            const CURRENCY_CLS = {
+                              ARS:  'bg-[#F1F5F9] text-[#64748B]',
+                              USD:  'bg-[#DCFCE7] text-[#16A34A]',
+                              USDT: 'bg-[#DBEAFE] text-[#2563EB]',
+                            };
+                            return (
+                              <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${CURRENCY_CLS[cur] ?? CURRENCY_CLS.ARS}`}>
+                                {cur}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-3.5 text-[#94A3B8] hidden md:table-cell">
                           {fmtTime(m.createdAt)}
