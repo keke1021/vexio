@@ -142,7 +142,7 @@ const getById = async (req, res) => {
 const create = async (req, res) => {
   try {
     const { tenantId } = req.user;
-    const { productName, color, storage, imei, condition, costPrice, salePrice, supplierId, accessories, notes } = req.body;
+    const { productName, color, storage, imei, condition, costPrice, salePrice, currency, supplierId, accessories, notes } = req.body;
 
     if (!productName || !color || !storage || !imei || costPrice == null || salePrice == null) {
       return res.status(400).json({ message: 'Campos requeridos: modelo, color, storage, IMEI, costo y precio de venta.' });
@@ -168,6 +168,7 @@ const create = async (req, res) => {
         condition: condition || 'NEW',
         costPrice: parseFloat(costPrice),
         salePrice: parseFloat(salePrice),
+        currency: ['ARS', 'USD', 'USDT'].includes(currency) ? currency : 'ARS',
         accessories: accessories || [],
         notes: notes || null,
         productId: product.id,

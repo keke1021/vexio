@@ -63,7 +63,7 @@ const InventoryNew = () => {
     imei: '',
     condition: 'NEW',
     costPrice: '',
-    costCurrency: 'ARS',
+    currency: 'ARS',
     salePrice: '',
     supplierId: '',
     accessories: [],
@@ -229,13 +229,13 @@ const InventoryNew = () => {
               <button
                 key={cur}
                 type="button"
-                onClick={() => setForm((p) => ({ ...p, costCurrency: cur }))}
+                onClick={() => setForm((p) => ({ ...p, currency: cur }))}
                 className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all ${
-                  form.costCurrency === cur
+                  form.currency === cur
                     ? 'text-white border-transparent'
                     : 'bg-white border-[#E2E8F0] text-[#94A3B8] hover:text-[#64748B]'
                 }`}
-                style={form.costCurrency === cur ? { backgroundColor: '#1E3A5F' } : {}}
+                style={form.currency === cur ? { backgroundColor: '#1E3A5F' } : {}}
               >
                 {cur}
               </button>
@@ -252,7 +252,7 @@ const InventoryNew = () => {
                 step="0.01"
                 required
               />
-              <p className="mt-1 text-[11px] text-[#CBD5E1]">Costo ({form.costCurrency})</p>
+              <p className="mt-1 text-[11px] text-[#CBD5E1]">Costo ({form.currency})</p>
             </div>
             <div className="flex-1 min-w-0">
               <Input
@@ -264,7 +264,7 @@ const InventoryNew = () => {
                 step="0.01"
                 required
               />
-              <p className="mt-1 text-[11px] text-[#CBD5E1]">Precio de venta</p>
+              <p className="mt-1 text-[11px] text-[#CBD5E1]">Precio de venta ({form.currency})</p>
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2">
