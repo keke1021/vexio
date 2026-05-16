@@ -24,7 +24,7 @@ const MoonIcon = () => (
 const NAV = [
   { path: '/dashboard',  label: 'Inicio',           exact: true,  module: null },
   { path: '/inventory',  label: 'Inventario',        exact: false, module: 'inventory' },
-  { path: '/pos',        label: 'Punto de Venta',    exact: false, module: 'pos' },
+  { path: '/pos',        label: 'Ventas',             exact: false, module: 'pos' },
   { path: '/repairs',    label: 'Reparaciones',      exact: false, module: 'repairs' },
   { path: '/cash',       label: 'Caja',              exact: false, module: 'cash' },
   { path: '/suppliers',  label: 'Proveedores',       exact: false, module: 'suppliers' },
