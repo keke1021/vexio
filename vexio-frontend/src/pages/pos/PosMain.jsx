@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/axios';
 
@@ -13,13 +13,39 @@ const PAYMENT_METHODS = [
 const formatCurrency = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
 
-const fmtUSD = (n) =>
-  `USD ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)}`;
+const fmtGeneric = (n, code) =>
+  `${code} ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)}`;
 
-const fmtByCurrency = (n, cur) => (cur === 'ARS' ? formatCurrency(n) : fmtUSD(n));
+const fmtByCurrency = (n, cur) => (cur === 'ARS' ? formatCurrency(n) : fmtGeneric(n, cur));
 
 const formatRate = (n) =>
   n != null ? new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(n) : '—';
+
+// ─── Conversión (preview del carrito — el backend es la fuente de verdad) ─────
+//
+// Antes esta fórmula estaba duplicada acá y en pos.controller.js, y encima
+// usaba la cotización del dólar blue tanto para USD como para USDT. Ahora
+// hay una sola función, con la misma lógica que src/services/
+// exchangeRates.service.js del backend (no se puede compartir el archivo
+// literal entre los dos proyectos — son dos apps node separadas sin paquete
+// compartido — pero es la misma fórmula, documentada igual). Esto es solo
+// para mostrarle un precio estimado al vendedor en el carrito: la venta se
+// recalcula siempre en el backend con la cotización real del momento, este
+// resultado nunca se manda como si fuera el precio final.
+//
+// 1 unidad de `from` = ? unidades de `to`.
+const resolveRate = (rates, from, to) => {
+  if (from === to) return 1;
+  const arsPerUnit = { USD: rates?.blue?.sell ?? null, USDT: rates?.usdt?.price ?? null };
+  if (from === 'ARS') {
+    const arsPerTo = arsPerUnit[to];
+    return arsPerTo ? 1 / arsPerTo : null;
+  }
+  if (to === 'ARS') return arsPerUnit[from] ?? null;
+  const a = arsPerUnit[from];
+  const b = arsPerUnit[to];
+  return (a && b) ? a / b : null;
+};
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -33,15 +59,17 @@ const PencilIcon = () => (
 
 // ─── Result Card ──────────────────────────────────────────────────────────────
 
-const ResultCard = ({ item, onAdd, inCart, blueRate }) => {
-  const isUSD = item.currency !== 'ARS';
-  const primaryFmt = isUSD ? fmtUSD(item.salePrice) : formatCurrency(item.salePrice);
-  let dualLine = null;
-  if (blueRate) {
-    dualLine = isUSD
-      ? `${fmtUSD(item.salePrice)} · ${formatCurrency(item.salePrice * blueRate)} ARS`
-      : `${formatCurrency(item.salePrice)} ARS · ${fmtUSD(item.salePrice / blueRate)}`;
-  }
+const ResultCard = ({ item, onAdd, inCart, rates }) => {
+  const cur = item.currencyCode ?? 'ARS';
+  const isARS = cur === 'ARS';
+  const primaryFmt = fmtByCurrency(item.salePrice, cur);
+
+  // Línea secundaria: precio en la "otra" moneda de referencia (ARS si el
+  // item está en USD/USDT, USD si el item está en ARS), con la tasa real
+  // del par correspondiente — ya no asume blue para todo lo que no sea ARS.
+  const otherCur = isARS ? 'USD' : 'ARS';
+  const rate = resolveRate(rates, cur, otherCur);
+  const dualLine = rate ? `${primaryFmt} · ${fmtByCurrency(item.salePrice * rate, otherCur)}` : null;
 
   return (
     <button
@@ -153,8 +181,12 @@ const CartItem = ({ entry, displayPrice, currency, onRemove, onSetPrice }) => {
 };
 
 // ─── Rates Widget ─────────────────────────────────────────────────────────────
+// Solo muestra la cotización en vivo y una calculadora de referencia. Ya no
+// tiene selector "Tipo de cambio para la venta" (BLUE/USDT/NONE) — el
+// backend elige automáticamente el par correcto según la moneda de la
+// venta, no hace falta que el vendedor lo indique a mano.
 
-const RatesWidget = ({ rates, onRateSelect, selectedType }) => {
+const RatesWidget = ({ rates }) => {
   const [expanded, setExpanded] = useState(false);
   const [usdAmount, setUsdAmount] = useState('');
 
@@ -219,30 +251,6 @@ const RatesWidget = ({ rates, onRateSelect, selectedType }) => {
             )}
           </div>
 
-          <div>
-            <p className="text-[10px] text-white/50 uppercase tracking-wider mb-1.5">Tipo de cambio para la venta</p>
-            <div className="flex gap-2">
-              {[
-                { type: 'BLUE', rate: blue?.sell,  label: 'Blue' },
-                { type: 'USDT', rate: usdt?.price, label: 'USDT' },
-                { type: 'NONE', rate: null,         label: 'Ninguno' },
-              ].map(({ type, rate, label }) => (
-                <button
-                  key={type}
-                  onClick={() => onRateSelect(type, rate)}
-                  className={`flex-1 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
-                    selectedType === type
-                      ? 'bg-white text-[#1E3A5F]'
-                      : 'bg-white/10 text-white/75 hover:bg-white/20 border border-white/20'
-                  }`}
-                >
-                  {label}
-                  {rate && <span className="block text-[10px] opacity-70">${formatRate(rate)}</span>}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {rates?.updatedAt && (
             <p className="text-[10px] text-white/30">
               Actualizado {fmtTs(rates.updatedAt)}{rates.stale ? ' (caché)' : ''}
@@ -269,8 +277,27 @@ const PosMain = () => {
   const [customerName, setCustomerName]   = useState('');
   const [showCustomer, setShowCustomer]   = useState(false);
   const [saleError, setSaleError]         = useState('');
-  const [exchangeType, setExchangeType]   = useState('NONE');
-  const [exchangeRate, setExchangeRate]   = useState(null);
+
+  // Toda venta pertenece a una sucursal (igual que Caja) — tiendaId viaja en
+  // la URL para poder compartirse/refrescarse, auto-preseleccionada si el
+  // tenant tiene una sola tienda, seleccionable si tiene más de una. Mismo
+  // patrón que CashMain.jsx.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { data: tiendasData } = useQuery({
+    queryKey: ['tiendas'],
+    queryFn: () => api.get('/tiendas').then((r) => r.data),
+    staleTime: 5 * 60_000,
+  });
+  const tiendas = tiendasData?.tiendas ?? [];
+  const tiendaIdParam = searchParams.get('tiendaId') || '';
+  const tiendaId = tiendaIdParam || (tiendas.length === 1 ? tiendas[0].id : '');
+
+  useEffect(() => {
+    if (!tiendaIdParam && tiendas.length === 1) {
+      setSearchParams({ tiendaId: tiendas[0].id }, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiendas.length, tiendaIdParam]);
 
   useEffect(() => { searchRef.current?.focus(); }, []);
 
@@ -289,32 +316,21 @@ const PosMain = () => {
     throwOnError:    false,
   });
 
-  const blueRate  = rates?.blue?.sell ?? null;
-  // Both USD and USDT use blue sell rate for conversion
-  const activeRate = (saleCurrency === 'USD' || saleCurrency === 'USDT') ? blueRate : null;
-
-  // Keep exchangeRate in sync when rate refreshes (e.g. every 5 min)
-  useEffect(() => {
-    if (saleCurrency !== 'ARS' && blueRate) setExchangeRate(blueRate);
-  }, [blueRate, saleCurrency]);
+  // Tasa relevante para la moneda de venta actual (solo para el aviso de
+  // "cotización no disponible" y el pie de página del total) — el precio
+  // real de cada item usa su propio par vía resolveRate.
+  const activeRate = saleCurrency !== 'ARS' ? resolveRate(rates, saleCurrency, 'ARS') : null;
 
   // ─── Price helpers ────────────────────────────────────────────────────────
-  // cart entry: { item, baseSalePrice (in item.currency), manualPrice (null | number in saleCurrency) }
+  // cart entry: { item, baseSalePrice (en item.currencyCode), manualPrice (null | number en saleCurrency) }
   const getDisplayPrice = (entry) => {
     if (entry.manualPrice !== null) return entry.manualPrice;
-    const itemCurrency = entry.item.currency ?? 'ARS';
+    const itemCurrency = entry.item.currencyCode ?? 'ARS';
     const price = entry.baseSalePrice;
     if (itemCurrency === saleCurrency) return price;
-    // ARS item, selling in USD/USDT → divide by blue rate
-    if (itemCurrency === 'ARS' && saleCurrency !== 'ARS') {
-      return activeRate ? +(price / activeRate).toFixed(2) : price;
-    }
-    // USD/USDT item, selling in ARS → multiply by blue rate
-    if (itemCurrency !== 'ARS' && saleCurrency === 'ARS') {
-      return blueRate ? Math.round(price * blueRate) : price;
-    }
-    // USD ↔ USDT: treat as 1:1
-    return price;
+    const rate = resolveRate(rates, itemCurrency, saleCurrency);
+    if (!rate) return price;
+    return saleCurrency === 'ARS' ? Math.round(price * rate) : parseFloat((price * rate).toFixed(2));
   };
 
   // ─── Search ───────────────────────────────────────────────────────────────
@@ -353,18 +369,11 @@ const PosMain = () => {
   const handleCurrencyChange = (cur) => {
     setSaleCurrency(cur);
     setCart((prev) => prev.map((e) => ({ ...e, manualPrice: null })));
-    if (cur === 'ARS') {
-      setExchangeType('NONE');
-      setExchangeRate(null);
-    } else {
-      setExchangeType('BLUE');
-      setExchangeRate(blueRate);
-    }
   };
 
   const total      = cart.reduce((sum, c) => sum + getDisplayPrice(c), 0);
-  const canConfirm = cart.length > 0 && paymentMethod;
-  const noRateWarn = saleCurrency !== 'ARS' && !blueRate;
+  const canConfirm = cart.length > 0 && paymentMethod && !!tiendaId;
+  const noRateWarn = saleCurrency !== 'ARS' && !activeRate;
 
   // ─── Sale mutation ────────────────────────────────────────────────────────
   const saleMutation = useMutation({
@@ -380,13 +389,16 @@ const PosMain = () => {
 
   const handleConfirm = () => {
     setSaleError('');
+    // El precio que se manda es el editado a mano en el carrito (si lo hay)
+    // o el estimado localmente — el backend jamás lo toma como definitivo,
+    // recalcula todo con la cotización real del momento. No se manda
+    // exchangeRate/exchangeType: el backend los resuelve solo.
     saleMutation.mutate({
       items:        cart.map((c) => ({ inventoryItemId: c.item.id, salePrice: getDisplayPrice(c) })),
       paymentMethod,
       currency:     saleCurrency,
       customerName: customerName || undefined,
-      exchangeType: exchangeType !== 'NONE' ? exchangeType : undefined,
-      exchangeRate: exchangeRate ?? undefined,
+      tiendaId,
     });
   };
 
@@ -399,18 +411,45 @@ const PosMain = () => {
     if (e.key === 'Escape') { setSearch(''); setDebouncedQ(''); }
   };
 
-  const handleRateSelect = (type, rate) => {
-    setExchangeType(type);
-    setExchangeRate(rate ?? null);
-  };
-
   return (
-    <div className="flex h-[calc(100vh-56px)]">
+    <div className="h-[calc(100vh-56px)] bg-[#F8FAFC]">
+      {/* max-w-6xl + mx-auto centra el conjunto en monitores anchos — antes
+          el buscador pegaba a la izquierda y dejaba un solo bloque de
+          espacio vacío grande y descompensado del lado derecho. */}
+      <div className="flex items-start h-full max-w-6xl mx-auto">
 
-      {/* ── Panel izquierdo: búsqueda + resultados + rates ── */}
-      <div className="flex-1 flex flex-col border-r border-[#E2E8F0] overflow-hidden">
+      {/* ── Panel izquierdo: búsqueda + resultados + rates ──
+          self-stretch mantiene su alto completo (con scroll interno de
+          resultados) igual que antes; flex-1 ahora está acotado por el
+          max-w-6xl del contenedor — antes crecía sin límite hasta el borde
+          de la pantalla en monitores anchos. */}
+      <div className="flex-1 self-stretch flex flex-col border-r border-[#E2E8F0] overflow-hidden bg-white">
 
         <div className="p-5 border-b border-[#E2E8F0] bg-white">
+          {tiendas.length > 1 && (
+            <div className="mb-3">
+              <label className="text-[10px] text-[#94A3B8] uppercase tracking-[0.12em] mr-2">Sucursal</label>
+              <select
+                value={tiendaId}
+                onChange={(e) => setSearchParams({ tiendaId: e.target.value })}
+                className="bg-white border border-[#E2E8F0] rounded-lg px-2 py-1 text-[13px] text-[#0F172A]
+                  focus:outline-none focus:border-[#3B82F6] transition-all"
+              >
+                <option value="">Seleccioná una sucursal</option>
+                {tiendas.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {tiendas.length === 0 && (
+            <p className="mb-3 text-[12px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Todavía no hay ninguna sucursal creada — hace falta al menos una para poder vender.
+            </p>
+          )}
+          {tiendas.length > 1 && !tiendaId && (
+            <p className="mb-3 text-[12px] text-[#94A3B8]">Elegí una sucursal arriba para poder vender.</p>
+          )}
           <div className="relative">
             <input
               ref={searchRef}
@@ -438,7 +477,7 @@ const PosMain = () => {
             </p>
           )}
           {results.map((item) => (
-            <ResultCard key={item.id} item={item} onAdd={addToCart} inCart={cartIds.has(item.id)} blueRate={blueRate} />
+            <ResultCard key={item.id} item={item} onAdd={addToCart} inCart={cartIds.has(item.id)} rates={rates} />
           ))}
           {!debouncedQ && (
             <div className="flex flex-col items-center justify-center h-full py-20 text-center">
@@ -447,14 +486,14 @@ const PosMain = () => {
           )}
         </div>
 
-        <RatesWidget
-          rates={rates}
-          onRateSelect={handleRateSelect}
-          selectedType={exchangeType}
-        />
+        <RatesWidget rates={rates} />
       </div>
 
-      {/* ── Panel derecho: carrito ── */}
+      {/* ── Panel derecho: carrito — alto natural según su contenido, no
+          forzado a llenar el viewport (antes "flex-1" lo estiraba a la
+          altura completa de la pantalla incluso vacío). El scroll interno
+          en la lista de ítems queda acotado a max-h, no a toda la altura,
+          para no perder esa protección si el carrito tiene muchos ítems. ── */}
       <div className="w-80 xl:w-96 flex flex-col" style={{ backgroundColor: '#F0F4F8' }}>
 
         <div className="px-5 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-white">
@@ -468,7 +507,7 @@ const PosMain = () => {
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-3 bg-white">
+        <div className="max-h-[45vh] overflow-y-auto px-5 py-3 bg-white">
           {cart.length === 0 ? (
             <p className="text-center py-12 text-[12px] text-[#CBD5E1]">El carrito está vacío</p>
           ) : (
@@ -494,14 +533,14 @@ const PosMain = () => {
               <span className="text-[12px] text-[#94A3B8] uppercase tracking-wider">Total</span>
               <span className="text-[24px] font-bold text-[#0F172A]">{fmtByCurrency(total, saleCurrency)}</span>
             </div>
-            {saleCurrency !== 'ARS' && blueRate && (
+            {saleCurrency !== 'ARS' && activeRate && (
               <p className="text-[11px] text-[#94A3B8] text-right mt-0.5">
-                TC Blue: ${Math.round(blueRate).toLocaleString('es-AR')}
+                TC {saleCurrency === 'USDT' ? 'USDT (Binance)' : 'Blue'}: ${Math.round(activeRate).toLocaleString('es-AR')}
               </p>
             )}
             {noRateWarn && (
               <p className="text-[11px] text-amber-500 mt-1">
-                ⚠ Cotización blue no disponible — precios sin convertir
+                ⚠ Cotización {saleCurrency} no disponible — precios sin convertir
               </p>
             )}
           </div>
@@ -588,6 +627,7 @@ const PosMain = () => {
             Ver historial →
           </Link>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -6,6 +6,15 @@ import { useAuth } from '../../context/AuthContext';
 const formatCurrency = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
 
+const fmtGeneric = (n, code) =>
+  `${code} ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)}`;
+
+// El ticket siempre mostraba formatCurrency (pesos) sin importar la moneda
+// real de la venta — una venta en USD/USDT se veía con el símbolo $ como si
+// fuera ARS. Se corrige acá porque este archivo ya estaba en la lista de
+// este módulo y el bug afecta directamente lo que el cliente ve impreso.
+const fmtByCurrency = (n, code) => (code === 'ARS' ? formatCurrency(n) : fmtGeneric(n, code));
+
 const formatDateTime = (d) =>
   new Date(d).toLocaleString('es-AR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
@@ -15,15 +24,15 @@ const formatDateTime = (d) =>
 const ticketNumber = (id) => id?.slice(-6).toUpperCase() ?? '—';
 
 const getPaymentLabel = (sale) => {
-  const { paymentMethod, currency, exchangeRate } = sale;
-  if (currency === 'USDT') {
+  const { paymentMethod, currencyCode, exchangeRate } = sale;
+  if (currencyCode === 'USDT') {
     return exchangeRate
       ? `USDT (cambio $${Math.round(exchangeRate).toLocaleString('es-AR')})`
       : 'USDT';
   }
   switch (paymentMethod) {
     case 'CASH':
-      return currency === 'USD' ? 'Efectivo USD' : 'Efectivo ARS';
+      return currencyCode === 'USD' ? 'Efectivo USD' : 'Efectivo ARS';
     case 'TRANSFER':
       return 'Transferencia bancaria';
     case 'CARD':
@@ -132,7 +141,7 @@ const PosSaleDetail = () => {
                   </p>
                 </div>
                 <span className="text-[14px] font-semibold text-[#0F172A] print:text-black shrink-0">
-                  {formatCurrency(si.salePrice)}
+                  {fmtByCurrency(si.salePrice, sale.currencyCode)}
                 </span>
               </div>
             </div>
@@ -144,7 +153,7 @@ const PosSaleDetail = () => {
           <div className="flex items-center justify-between">
             <span className="text-[13px] text-[#0F172A] print:text-black">Total</span>
             <span className="text-[26px] font-bold text-[#0F172A] print:text-black">
-              {formatCurrency(sale.total)}
+              {fmtByCurrency(sale.total, sale.currencyCode)}
             </span>
           </div>
         </div>

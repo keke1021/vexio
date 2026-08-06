@@ -6,7 +6,6 @@ import AdminRoute from './components/AdminRoute';
 import Layout from './components/Layout';
 import AdminLayout from './components/AdminLayout';
 import Login from './pages/Login';
-import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import InventoryList from './pages/inventory/InventoryList';
 import InventoryNew from './pages/inventory/InventoryNew';
@@ -19,6 +18,8 @@ import RepairsNew from './pages/repairs/RepairsNew';
 import RepairsDetail from './pages/repairs/RepairsDetail';
 import CashMain from './pages/cash/CashMain';
 import CashMovementNew from './pages/cash/CashMovementNew';
+import CashSessionsHistory from './pages/cash/CashSessionsHistory';
+import CashSessionDetail from './pages/cash/CashSessionDetail';
 import SuppliersList from './pages/suppliers/SuppliersList';
 import SuppliersNew from './pages/suppliers/SuppliersNew';
 import SuppliersDetail from './pages/suppliers/SuppliersDetail';
@@ -38,7 +39,11 @@ const App = () => (
   <AuthProvider>
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      {/* Registro público deshabilitado — decisión de negocio (2026-08-06):
+          las cuentas de clientes las crea Ezequiel desde el panel de Admin
+          (createTenant). /register redirige a /login en vez de mostrar el
+          formulario. */}
+      <Route path="/register" element={<Navigate to="/login" replace />} />
 
       <Route element={<PrivateRoute />}>
         <Route element={<Layout />}>
@@ -61,6 +66,8 @@ const App = () => (
 
           <Route path="/cash"                  element={<CashMain />} />
           <Route path="/cash/movements/new"    element={<CashMovementNew />} />
+          <Route path="/cash/sessions"         element={<CashSessionsHistory />} />
+          <Route path="/cash/sessions/:id"     element={<CashSessionDetail />} />
 
           <Route path="/suppliers"                        element={<SuppliersList />} />
           <Route path="/suppliers/new"                    element={<SuppliersNew />} />

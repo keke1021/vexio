@@ -3,10 +3,11 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/axios';
 
+// El límite de usuarios ya no depende del plan (ver tenant.maxUsers).
 const PLAN_CONFIG = {
-  STARTER: { label: 'Starter', cls: 'text-violet-600 bg-violet-50', limit: 3 },
-  PRO:     { label: 'Pro',     cls: 'text-violet-700 bg-violet-100', limit: 5 },
-  FULL:    { label: 'Full',    cls: 'text-fuchsia-700 bg-fuchsia-50 ring-1 ring-fuchsia-200', limit: 7 },
+  STARTER: { label: 'Starter', cls: 'text-violet-600 bg-violet-50' },
+  PRO:     { label: 'Pro',     cls: 'text-violet-700 bg-violet-100' },
+  FULL:    { label: 'Full',    cls: 'text-fuchsia-700 bg-fuchsia-50 ring-1 ring-fuchsia-200' },
 };
 
 const STATUS_CONFIG = {
@@ -16,7 +17,8 @@ const STATUS_CONFIG = {
 };
 
 const ROLE_LABELS = { OWNER: 'Owner', ADMIN: 'Admin', SELLER: 'Vendedor', TECH: 'Técnico', SUPERADMIN: 'Superadmin' };
-const CURRENCY_LABELS = { USD: 'USD', PESOS: 'Pesos', USDT: 'USDT' };
+const CURRENCY_LABELS = { ARS: 'ARS', USD: 'USD', USDT: 'USDT' };
+const PAYMENT_TYPE_LABELS = { IMPLEMENTATION: 'Implementación', MONTHLY: 'Mensualidad' };
 
 const Badge = ({ config, value }) => {
   const cfg = config[value] ?? { label: value, cls: 'text-[#94A3B8] bg-[#F1F5F9]' };
@@ -44,7 +46,10 @@ const fmtDateTime = (d) =>
 const inputCls = 'bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#0F172A] placeholder-[#CBD5E1] focus:outline-none focus:border-violet-400 transition-all';
 
 const PaymentForm = ({ tenantId, onSuccess, onCancel }) => {
-  const [form, setForm] = useState({ amount: '', currency: 'USD', paidAt: new Date().toISOString().split('T')[0], notes: '' });
+  const [form, setForm] = useState({
+    amount: '', currencyCode: 'USD', paymentType: 'MONTHLY',
+    paidAt: new Date().toISOString().split('T')[0], notes: '',
+  });
   const [error, setError] = useState('');
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
@@ -64,17 +69,24 @@ const PaymentForm = ({ tenantId, onSuccess, onCancel }) => {
   return (
     <form onSubmit={handleSubmit} className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-5 mt-4">
       <p className="text-[11px] text-violet-600 uppercase tracking-widest font-medium mb-4">Registrar pago</p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-3">
         <div className="sm:col-span-2">
           <label className="block text-[13px] font-medium text-[#64748B] mb-1.5">Monto</label>
           <input type="number" placeholder="0" value={form.amount} onChange={set('amount')} min="0.01" step="0.01" required className={`${inputCls} w-full`} />
         </div>
         <div>
           <label className="block text-[13px] font-medium text-[#64748B] mb-1.5">Moneda</label>
-          <select value={form.currency} onChange={set('currency')} className={`${inputCls} w-full`}>
+          <select value={form.currencyCode} onChange={set('currencyCode')} className={`${inputCls} w-full`}>
+            <option value="ARS">ARS</option>
             <option value="USD">USD</option>
-            <option value="PESOS">Pesos</option>
             <option value="USDT">USDT</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[13px] font-medium text-[#64748B] mb-1.5">Tipo</label>
+          <select value={form.paymentType} onChange={set('paymentType')} className={`${inputCls} w-full`}>
+            <option value="MONTHLY">Mensualidad</option>
+            <option value="IMPLEMENTATION">Implementación</option>
           </select>
         </div>
         <div>
@@ -126,8 +138,8 @@ const PLAN_MODULES = {
   FULL:    ['inventory', 'pos', 'customers', 'repairs', 'cash', 'suppliers', 'warranties', 'whatsapp', 'reports', 'multibranch'],
 };
 
-const AddUserForm = ({ tenantId, onSuccess, onCancel }) => {
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'SELLER' });
+const AddUserForm = ({ tenantId, tiendas, onSuccess, onCancel }) => {
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'SELLER', tiendaId: '' });
   const [err,  setErr]  = useState('');
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
@@ -142,7 +154,7 @@ const AddUserForm = ({ tenantId, onSuccess, onCancel }) => {
     e.preventDefault();
     setErr('');
     if (form.password.length < 6) return setErr('La contraseña debe tener al menos 6 caracteres.');
-    mutation.mutate(form);
+    mutation.mutate({ ...form, tiendaId: form.tiendaId || null });
   };
 
   return (
@@ -167,6 +179,13 @@ const AddUserForm = ({ tenantId, onSuccess, onCancel }) => {
             {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
+        <div>
+          <label className="block text-[13px] font-medium text-[#64748B] mb-1.5">Sucursal (opcional)</label>
+          <select value={form.tiendaId} onChange={set('tiendaId')} className={`${inputCls} w-full`}>
+            <option value="">— Sin asignar —</option>
+            {(tiendas ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
       </div>
       {err && <p className="text-[12px] text-red-500 mb-3">{err}</p>}
       <div className="flex items-center gap-3">
@@ -180,16 +199,62 @@ const AddUserForm = ({ tenantId, onSuccess, onCancel }) => {
   );
 };
 
+const TiendaForm = ({ tenantId, onSuccess, onCancel }) => {
+  const [form, setForm] = useState({ name: '', address: '' });
+  const [err,  setErr]  = useState('');
+
+  const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  const mutation = useMutation({
+    mutationFn: (data) => api.post(`/admin/tenants/${tenantId}/tiendas`, data).then((r) => r.data),
+    onSuccess: () => { setErr(''); onSuccess(); },
+    onError: (e) => setErr(e.response?.data?.message || 'Error al crear la sucursal.'),
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setErr('');
+    mutation.mutate(form);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-5 mt-4">
+      <p className="text-[11px] text-violet-600 uppercase tracking-widest font-medium mb-4">Agregar sucursal</p>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="block text-[13px] font-medium text-[#64748B] mb-1.5">Nombre</label>
+          <input type="text" placeholder="Sucursal Centro" value={form.name} onChange={set('name')} required className={`${inputCls} w-full`} />
+        </div>
+        <div>
+          <label className="block text-[13px] font-medium text-[#64748B] mb-1.5">Dirección (opcional)</label>
+          <input type="text" placeholder="Av. Siempreviva 742" value={form.address} onChange={set('address')} className={`${inputCls} w-full`} />
+        </div>
+      </div>
+      {err && <p className="text-[12px] text-red-500 mb-3">{err}</p>}
+      <div className="flex items-center gap-3">
+        <button type="submit" disabled={mutation.isPending}
+          className="bg-violet-600 hover:bg-violet-700 text-white text-[13px] font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-40">
+          {mutation.isPending ? 'Creando...' : 'Crear sucursal'}
+        </button>
+        <button type="button" onClick={onCancel} className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors">Cancelar</button>
+      </div>
+    </form>
+  );
+};
+
 const AdminTenantDetail = () => {
   const { id } = useParams();
   const queryClient = useQueryClient();
 
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [showAddUser,     setShowAddUser]     = useState(false);
+  const [showAddTienda,   setShowAddTienda]   = useState(false);
   const [actionError,  setActionError]  = useState('');
   const [pendingPlan,  setPendingPlan]  = useState(null);
   const [localModules, setLocalModules] = useState(null);
   const [saveSuccess,  setSaveSuccess]  = useState(false);
+  const [storeCountInput, setStoreCountInput] = useState(null);
+  const [maxUsersInput,   setMaxUsersInput]   = useState(null);
 
   const { data: tenant, isLoading, refetch: refetchTenant } = useQuery({
     queryKey: ['admin-tenant', id],
@@ -214,11 +279,17 @@ const AdminTenantDetail = () => {
     onError: (err) => setActionError(err.response?.data?.message || 'Error al eliminar el usuario.'),
   });
 
-  // Used only for status (Suspender/Activar) — plan+modules now use saveMutation
+  // Usado para status (Suspender/Activar), storeCount y maxUsers — plan+modules usan saveMutation
   const updateMutation = useMutation({
     mutationFn: (data) => api.put(`/admin/tenants/${id}`, data).then((r) => r.data),
-    onSuccess: () => { setActionError(''); invalidate(); },
+    onSuccess: () => { setActionError(''); setStoreCountInput(null); setMaxUsersInput(null); invalidate(); },
     onError: (err) => setActionError(err.response?.data?.message || 'Error al actualizar.'),
+  });
+
+  const deleteTiendaMutation = useMutation({
+    mutationFn: (tiendaId) => api.delete(`/admin/tenants/${id}/tiendas/${tiendaId}`).then((r) => r.data),
+    onSuccess: () => { setActionError(''); invalidate(); },
+    onError: (err) => setActionError(err.response?.data?.message || 'Error al eliminar la sucursal.'),
   });
 
   const saveMutation = useMutation({
@@ -308,6 +379,58 @@ const AdminTenantDetail = () => {
             <p className="text-[13px] text-[#64748B]">{val}</p>
           </div>
         ))}
+        <div>
+          <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-1">
+            Sucursales activas
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="1"
+              value={storeCountInput ?? tenant.storeCount ?? 1}
+              onChange={(e) => setStoreCountInput(e.target.value)}
+              className="w-16 bg-white border border-[#E2E8F0] rounded-lg px-2 py-1 text-[13px] text-[#0F172A]
+                focus:outline-none focus:border-violet-400 transition-all"
+            />
+            {storeCountInput !== null && parseInt(storeCountInput, 10) !== tenant.storeCount && (
+              <button
+                type="button"
+                onClick={() => updateMutation.mutate({ storeCount: parseInt(storeCountInput, 10) })}
+                disabled={updateMutation.isPending}
+                className="text-[11px] text-violet-600 hover:text-violet-700 font-medium transition-colors disabled:opacity-40"
+              >
+                Guardar
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] text-[#CBD5E1] mt-1">Solo informativo — no afecta ningún cálculo</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-1">
+            Usuarios máx.
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="1"
+              value={maxUsersInput ?? tenant.maxUsers ?? 7}
+              onChange={(e) => setMaxUsersInput(e.target.value)}
+              className="w-16 bg-white border border-[#E2E8F0] rounded-lg px-2 py-1 text-[13px] text-[#0F172A]
+                focus:outline-none focus:border-violet-400 transition-all"
+            />
+            {maxUsersInput !== null && parseInt(maxUsersInput, 10) !== tenant.maxUsers && (
+              <button
+                type="button"
+                onClick={() => updateMutation.mutate({ maxUsers: parseInt(maxUsersInput, 10) })}
+                disabled={updateMutation.isPending}
+                className="text-[11px] text-violet-600 hover:text-violet-700 font-medium transition-colors disabled:opacity-40"
+              >
+                Guardar
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] text-[#CBD5E1] mt-1">Límite real de usuarios de esta tienda</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
@@ -380,8 +503,7 @@ const AdminTenantDetail = () => {
           <div className="flex items-center gap-3">
             <p className="text-[11px] text-violet-600 uppercase tracking-widest font-medium">Usuarios</p>
             {(() => {
-              const planLimit  = PLAN_CONFIG[tenant.plan]?.limit ?? 3;
-              const totalLimit = planLimit + (tenant.extraUsers ?? 0);
+              const totalLimit = (tenant.maxUsers ?? 7) + (tenant.extraUsers ?? 0);
               const activeCount = tenant.users.filter((u) => u.isActive !== false).length;
               return (
                 <span className={`text-[11px] font-medium ${activeCount >= totalLimit ? 'text-red-500' : 'text-[#94A3B8]'}`}>
@@ -402,6 +524,7 @@ const AdminTenantDetail = () => {
         {showAddUser && (
           <AddUserForm
             tenantId={id}
+            tiendas={tenant.tiendas ?? []}
             onSuccess={() => { setShowAddUser(false); invalidate(); }}
             onCancel={() => setShowAddUser(false)}
           />
@@ -415,6 +538,7 @@ const AdminTenantDetail = () => {
                 <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Nombre</th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Email</th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Rol</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Sucursal</th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Alta</th>
                 <th className="px-4 py-2.5" />
               </tr>
@@ -425,6 +549,9 @@ const AdminTenantDetail = () => {
                   <td className="px-4 py-3 text-[#64748B]">{u.name}</td>
                   <td className="px-4 py-3 text-[#94A3B8] hidden sm:table-cell">{u.email}</td>
                   <td className="px-4 py-3 text-[#94A3B8] text-[12px]">{ROLE_LABELS[u.role] ?? u.role}</td>
+                  <td className="px-4 py-3 text-[#94A3B8] text-[12px] hidden lg:table-cell">
+                    {(tenant.tiendas ?? []).find((t) => t.id === u.tiendaId)?.name ?? '—'}
+                  </td>
                   <td className="px-4 py-3 text-[#CBD5E1] text-[12px] hidden md:table-cell">{fmtDate(u.createdAt)}</td>
                   <td className="px-4 py-3 text-right">
                     {u.role !== 'OWNER' && u.isActive !== false && (
@@ -443,6 +570,64 @@ const AdminTenantDetail = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[11px] text-violet-600 uppercase tracking-widest font-medium">
+            Sucursales ({(tenant.tiendas ?? []).length})
+          </p>
+          <button
+            onClick={() => setShowAddTienda((v) => !v)}
+            className="text-[12px] font-medium px-3 py-1 rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-600 border border-violet-200 transition-colors"
+          >
+            + Agregar sucursal
+          </button>
+        </div>
+
+        {showAddTienda && (
+          <TiendaForm
+            tenantId={id}
+            onSuccess={() => { setShowAddTienda(false); invalidate(); }}
+            onCancel={() => setShowAddTienda(false)}
+          />
+        )}
+
+        <div className="border border-[#E2E8F0] rounded-xl overflow-hidden mt-3 bg-white"
+          style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+          {(tenant.tiendas ?? []).length === 0 ? (
+            <p className="text-center py-8 text-[#CBD5E1] text-[13px]">Sin sucursales registradas.</p>
+          ) : (
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
+                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Nombre</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Dirección</th>
+                  <th className="px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {tenant.tiendas.map((t) => (
+                  <tr key={t.id} className="border-b border-[#E2E8F0]">
+                    <td className="px-4 py-3 text-[#64748B]">{t.name}</td>
+                    <td className="px-4 py-3 text-[#94A3B8] hidden sm:table-cell">{t.address ?? '—'}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => {
+                          if (confirm(`¿Eliminar la sucursal "${t.name}"? Los usuarios asignados quedarán sin sucursal.`)) deleteTiendaMutation.mutate(t.id);
+                        }}
+                        disabled={deleteTiendaMutation.isPending}
+                        className="text-[11px] text-red-400 hover:text-red-600 transition-colors disabled:opacity-40"
+                      >
+                        Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
@@ -489,11 +674,13 @@ const AdminTenantDetail = () => {
         <div className="flex items-center justify-between mb-3">
           <p className="text-[11px] text-violet-600 uppercase tracking-widest font-medium">Historial de pagos</p>
           {Object.keys(totalByCurrency).length > 0 && (
-            <div className="flex items-center gap-3">
-              {Object.entries(totalByCurrency).map(([currency, total]) => (
+            <div className="flex items-center gap-4">
+              {Object.entries(totalByCurrency).map(([currency, byType]) => (
                 <span key={currency} className="text-[11px] text-[#94A3B8]">
                   <span className="text-[#CBD5E1]">{currency}</span>{' '}
-                  <span className="text-[#64748B] font-medium">{total.toFixed(2)}</span>
+                  <span className="text-[#64748B] font-medium">
+                    mensual {byType.MONTHLY.toFixed(2)} · impl. {byType.IMPLEMENTATION.toFixed(2)}
+                  </span>
                 </span>
               ))}
             </div>
@@ -511,6 +698,7 @@ const AdminTenantDetail = () => {
                   <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Fecha</th>
                   <th className="text-right px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Monto</th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Moneda</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Tipo</th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Notas</th>
                   <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Registrado</th>
                 </tr>
@@ -524,8 +712,11 @@ const AdminTenantDetail = () => {
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-[11px] font-medium text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded">
-                        {CURRENCY_LABELS[p.currency] ?? p.currency}
+                        {CURRENCY_LABELS[p.currencyCode] ?? p.currencyCode}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-[#64748B] text-[12px]">
+                      {PAYMENT_TYPE_LABELS[p.paymentType] ?? p.paymentType}
                     </td>
                     <td className="px-4 py-3 text-[#94A3B8] text-[12px] hidden sm:table-cell">{p.notes ?? '—'}</td>
                     <td className="px-4 py-3 text-[#CBD5E1] text-[11px] hidden md:table-cell">{fmtDateTime(p.createdAt)}</td>

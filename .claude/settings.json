@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m ' *)",
+      "Bash(mkdir -p \"/c/Users/eze46/AppData/Local/Temp/claude/c--Users-eze46-OneDrive-Escritorio-Progamas-Vexio/2c0591b7-ad05-4954-b6d4-058580fd9887/scratchpad\")",
+      "Bash(npx prisma *)",
+      "Bash(echo \"EXIT:$?\")",
+      "Read(//tmp/**)",
+      "Read(//c/Users/eze46/AppData/Local/Temp/**)",
+      "Bash(node prisma/seed.js)",
+      "Bash(rm -f /tmp/unified_currency_migration.sql /tmp/diff_stderr.txt /tmp/check_drift.js 2>/dev/null; echo done)",
+      "Bash(node test-cash-flow.js)",
+      "Bash(node test-pos-flow.js)",
+      "Bash(node --check src/controllers/pos.controller.js)",
+      "Bash(node test-pos-verify.js)",
+      "Bash(node --check src/controllers/suppliers.controller.js)",
+      "Bash(node test-suppliers-flow.js)",
+      "Bash(node --check src/controllers/cash.controller.js)",
+      "Bash(node --check src/controllers/reports.controller.js)",
+      "Bash(node --check src/utils/ledger.js)",
+      "Bash(node test-suppliers-ledger.js)",
+      "Bash(node --check src/controllers/inventory.controller.js)",
+      "Bash(node test-inventory-flow.js)",
+      "Bash(node --check src/controllers/admin.controller.js)",
+      "Bash(node --check src/routes/admin.routes.js)",
+      "Bash(xargs grep -ln \"AdminStats\")",
+      "Bash(node test-admin-billing.js)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\eze46\\AppData\\Local\\Temp\\claude\\c--Users-eze46-OneDrive-Escritorio-Progamas-Vexio\\2c0591b7-ad05-4954-b6d4-058580fd9887\\scratchpad",
+      "\\tmp"
+    ]
+  }
+}

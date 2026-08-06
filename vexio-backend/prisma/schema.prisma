@@ -18,14 +18,21 @@ model Tenant {
   address            String?
   isActive           Boolean      @default(true)
   status             TenantStatus @default(ACTIVE)
-  plan               TenantPlan   @default(STARTER)
+  plan               TenantPlan   @default(FULL) // deprecated (ver enum), pero mientras exista, todo tenant nuevo entra con acceso completo por default
   activeModules      String[]     @default([])
   extraUsers         Int          @default(0)
+  maxUsers           Int          @default(7) // límite real de usuarios del tenant, seteado a mano por SUPERADMIN. Reemplaza a PLAN_USER_LIMITS.FULL (7) como fuente de verdad — default 7 preserva el comportamiento actual de los tenants existentes (todos entraban con plan FULL). Ya no depende del plan.
+  // DEPRECATED — informativo, se actualizaba a mano y no alimentaba ningún
+  // cálculo. La cantidad real de sucursales de un tenant ahora sale de
+  // contar sus filas de Tienda (ver modelo Tienda más abajo). No se borra
+  // todavía por si algo no detectado sigue leyéndolo.
+  storeCount         Int          @default(1)
   subscriptionEndsAt DateTime?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 
   users          User[]
+  tiendas        Tienda[]
   products       Product[]
   inventoryItems InventoryItem[]
   suppliers      Supplier[]
@@ -38,6 +45,11 @@ model Tenant {
   payments       Payment[]
   notifications  Notification[]
   tickets        SupportTicket[]
+
+  ledgerEntries    LedgerEntry[]
+  conversions      Conversion[]
+  stockTransfers   StockTransfer[]
+  supplierPayments SupplierPayment[]
 }
 
 enum Role {
@@ -54,6 +66,13 @@ enum TenantStatus {
   TRIAL
 }
 
+// DEPRECATED — sin uso real en el pricing actual (confirmado 2026-08).
+// No se borra todavía por si rompe algo no detectado (PLAN_MODULES en
+// admin.controller.js sigue leyendo este campo), pero no alimenta ningún
+// cálculo de facturación ni de límite de usuarios — eso ahora es
+// Payment.amount (facturación) y Tenant.maxUsers (usuarios), ambos
+// cargados a mano por SUPERADMIN. El límite de usuarios por plan
+// (PLAN_USER_LIMITS) fue reemplazado por Tenant.maxUsers.
 enum TenantPlan {
   STARTER
   PRO
@@ -71,6 +90,12 @@ model User {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
+  // Sucursal a la que pertenece este usuario. Opcional — un usuario sin
+  // tiendaId asignada no está atado a ninguna sucursal en particular.
+  // Etapa actual: solo asignación informativa, no filtra stock/caja/ventas.
+  tiendaId String?
+  tienda   Tienda? @relation(fields: [tiendaId], references: [id])
+
   refreshTokens       RefreshToken[]
   sales               Sale[]
   technicianRepairs   RepairOrder[]
@@ -80,6 +105,13 @@ model User {
   cashMovements       CashMovement[]        @relation("CashMovementCreator")
   tickets             SupportTicket[]
   ticketReplies       TicketReply[]
+  supplierPayments    SupplierPayment[]
+
+  ledgerEntries LedgerEntry[]
+  conversions   Conversion[]
+
+  stockTransfersDispatched StockTransfer[] @relation("StockTransferDispatcher")
+  stockTransfersReceived   StockTransfer[] @relation("StockTransferReceiver")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -96,6 +128,234 @@ model RefreshToken {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+}
+
+// ─── Sucursales ───────────────────────────────────────────────────────────────
+// Alta/baja/edición de sucursales de un tenant y asignación opcional de
+// usuarios a una de ellas. Reemplaza a Tenant.storeCount (deprecated) como
+// fuente de verdad de "cuántas sucursales tiene este tenant" — esa cantidad
+// sale de contar filas de Tienda.
+//
+// Etapa actual (2026-08-05): schema + backfill únicamente. InventoryItem,
+// CashSession y Sale ya tienen tiendaId obligatorio y PurchaseOrder opcional,
+// pero ningún controller todavía filtra ni valida por sucursal — eso es la
+// próxima etapa. Ver StockTransfer y la regla de negocio documentada junto a
+// Sale más abajo.
+
+model Tienda {
+  id      String  @id @default(cuid())
+  name    String
+  address String?
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  users User[]
+
+  inventoryItems   InventoryItem[]
+  cashSessions     CashSession[]
+  sales            Sale[]
+  purchaseOrders   PurchaseOrder[]
+  supplierPayments SupplierPayment[]
+
+  stockTransfersFrom StockTransfer[] @relation("StockTransferFrom")
+  stockTransfersTo   StockTransfer[] @relation("StockTransferTo")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, tenantId])
+  @@index([tenantId])
+}
+
+// ─── Moneda ─────────────────────────────────────────────────────────────────
+// Reemplaza los enums SaleCurrency y PaymentCurrency. Tabla global, sembrada
+// una sola vez con ARS/USD/USDT — no es por-tenant.
+
+model Currency {
+  code     String  @id // "ARS" | "USD" | "USDT"
+  name     String
+  symbol   String
+  decimals Int     @default(2) // reservado a futuro — hoy todas las columnas Decimal usan 2 decimales fijos, este campo no se usa todavía en ningún cálculo
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sales              Sale[]
+  saleItems          SaleItem[]
+  cashMovements      CashMovement[]
+  inventoryItems     InventoryItem[]
+  purchaseOrders     PurchaseOrder[]
+  purchaseOrderItems PurchaseOrderItem[]
+  payments           Payment[]
+  supplierPayments   SupplierPayment[]
+  ledgerEntries      LedgerEntry[]
+
+  ratesFrom       ExchangeRate[] @relation("ExchangeRateFrom")
+  ratesTo         ExchangeRate[] @relation("ExchangeRateTo")
+  conversionsFrom Conversion[]   @relation("ConversionFrom")
+  conversionsTo   Conversion[]   @relation("ConversionTo")
+}
+
+// Tasa de referencia diaria — reemplaza el caché en memoria de rates.controller.js.
+// Una fila por par de monedas por día. "1 fromCurrency = rate toCurrency".
+model ExchangeRate {
+  id String @id @default(cuid())
+
+  fromCurrencyCode String
+  fromCurrency     Currency @relation("ExchangeRateFrom", fields: [fromCurrencyCode], references: [code])
+  toCurrencyCode   String
+  toCurrency       Currency @relation("ExchangeRateTo", fields: [toCurrencyCode], references: [code])
+
+  rate      Decimal  @db.Decimal(18, 6)
+  source    String // "bluelytics" | "binance" | "manual"
+  validDate DateTime @db.Date // día al que corresponde esta tasa (una por par/día)
+  fetchedAt DateTime @default(now())
+
+  salesUsingThis         Sale[]         @relation("SaleReferenceRate")
+  cashMovementsUsingThis CashMovement[] @relation("CashMovementReferenceRate")
+
+  @@unique([fromCurrencyCode, toCurrencyCode, validDate])
+  @@index([validDate])
+}
+
+// Tipo de origen de cada movimiento del ledger. Determina qué FK de referencia
+// va a estar poblada (ver comentario en LedgerEntry).
+enum LedgerEntryType {
+  SALE
+  CASH_MOVEMENT_INCOME
+  CASH_MOVEMENT_EXPENSE
+  SESSION_OPEN
+  SESSION_CLOSE_ADJUSTMENT
+  PURCHASE_ORDER
+  SUBSCRIPTION_PAYMENT
+  CONVERSION
+  // Pago a proveedor pagado desde una cuenta externa a la empresa (no desde
+  // una caja del local). Solo trazabilidad de que se pagó y cuándo — nunca
+  // afecta ningún balance de caja, por eso vive en
+  // TENANT_BALANCE_EXCLUDED_TYPES igual que PURCHASE_ORDER/SUBSCRIPTION_PAYMENT
+  // (ver src/utils/ledger.js). El caso "pagado desde la caja del local" NO
+  // usa este type — reutiliza CASH_MOVEMENT_EXPENSE (mismo criterio que un
+  // egreso manual de caja), porque ese sí tiene que restar del balance.
+  SUPPLIER_PAYMENT_EXTERNAL
+}
+
+// Hecho financiero inmutable. Nunca se actualiza ni se borra desde la app —
+// para corregir algo se agrega una entrada nueva que lo compense (reversal),
+// no se edita la existente. (La app no expone update/delete para este modelo;
+// evaluar más adelante una regla/trigger de Postgres si se quiere blindar a
+// nivel DB también.)
+//
+// REGLA DE BALANCE — type=SUBSCRIPTION_PAYMENT: representa lo que el tenant
+// (la tienda) le paga a Vexio por la suscripción. Vive en este mismo ledger
+// por trazabilidad interna, pero NO es parte de la caja del negocio del
+// tenant. Cualquier balance/resumen que se le muestre al dueño del tenant
+// (Caja, Reportes, POS) debe filtrar `type != 'SUBSCRIPTION_PAYMENT'` por
+// default. Solo las vistas de Admin/Billing (SUPERADMIN, sobre Vexio como
+// negocio) pueden incluirlo. Recordar aplicar este filtro en cada query de
+// balance que se escriba a partir del módulo Caja/reportes en adelante.
+//
+// REGLA DE BALANCE — type=PURCHASE_ORDER: se crea al marcar una
+// PurchaseOrder como RECEIVED (no al crearla PENDING — recibirla es cuando
+// el taller efectivamente asume la deuda con el proveedor). Registra que se
+// generó una deuda, NO que salió plata de la caja en ese momento:
+// PurchaseOrder no tiene paymentMethod, y Supplier.paymentDays (default 30)
+// asume pago diferido, no inmediato desde el cajón. Por eso también se
+// excluye de cualquier balance de caja mostrado al tenant, mismo criterio
+// que SUBSCRIPTION_PAYMENT. El movimiento de caja real — cuando
+// efectivamente se le paga al proveedor, sea al recibir la orden o a los 30
+// días — todavía no existe como acción en el sistema (backlog, no
+// implementado).
+//
+// Ambas exclusiones viven juntas en TENANT_BALANCE_EXCLUDED_TYPES
+// (src/utils/ledger.js) — agregar ahí, no repetir la lista a mano en cada
+// controller.
+model LedgerEntry {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  currencyCode String
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
+  amount Decimal         @db.Decimal(10, 2) // firmado: + entra, − sale
+  type   LedgerEntryType
+
+  // Tasa REAL aplicada en este movimiento puntual (no la de referencia diaria).
+  // Null cuando el movimiento no involucra conversión (ej. venta en ARS pura).
+  appliedRate     Decimal? @db.Decimal(18, 6)
+  appliedRateBase String? // código de la moneda contra la que se expresa appliedRate
+
+  cashSessionId String?
+  cashSession   CashSession? @relation(fields: [cashSessionId], references: [id])
+
+  // Para type IN (SALE, CASH_MOVEMENT_INCOME, CASH_MOVEMENT_EXPENSE,
+  // PURCHASE_ORDER, SUBSCRIPTION_PAYMENT, CONVERSION): exactamente una de
+  // estas 6 referencias está poblada, según el type. Un pago a proveedor
+  // desde caja (source=CASH_REGISTER) es type=CASH_MOVEMENT_EXPENSE y usa
+  // cashMovementId como el resto de los egresos de caja — supplierPaymentId
+  // es exclusivo de type=SUPPLIER_PAYMENT_EXTERNAL (pago desde cuenta
+  // externa, sin CashMovement asociado).
+  // Para type IN (SESSION_OPEN, SESSION_CLOSE_ADJUSTMENT): NINGUNA de estas
+  // 6 referencias se completa — el único contexto es cashSessionId.
+  saleId            String?
+  sale              Sale?            @relation(fields: [saleId], references: [id])
+  cashMovementId    String?
+  cashMovement      CashMovement?    @relation(fields: [cashMovementId], references: [id])
+  purchaseOrderId   String?
+  purchaseOrder     PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
+  paymentId         String?
+  payment           Payment?         @relation(fields: [paymentId], references: [id])
+  conversionId      String?
+  conversion        Conversion?      @relation(fields: [conversionId], references: [id])
+  supplierPaymentId String?
+  supplierPayment   SupplierPayment? @relation(fields: [supplierPaymentId], references: [id])
+
+  description String?
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, currencyCode])
+  @@index([tenantId, cashSessionId])
+  @@index([tenantId, type])
+}
+
+// Dos LedgerEntry (uno negativo en fromCurrency, uno positivo en toCurrency)
+// creados en una única transacción atómica. Soporta cualquier par ARS/USD/USDT,
+// sin casos hardcodeados. El balance de origen se valida antes de ejecutar,
+// calculado desde LedgerEntry, bajo pg_advisory_xact_lock(tenantId+currency)
+// para evitar condición de carrera con otra operación concurrente.
+model Conversion {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  fromCurrencyCode String
+  fromCurrency     Currency @relation("ConversionFrom", fields: [fromCurrencyCode], references: [code])
+  toCurrencyCode   String
+  toCurrency       Currency @relation("ConversionTo", fields: [toCurrencyCode], references: [code])
+
+  fromAmount Decimal @db.Decimal(10, 2)
+  toAmount   Decimal @db.Decimal(10, 2)
+  rate       Decimal @db.Decimal(18, 6) // toAmount / fromAmount, tasa real aplicada
+
+  cashSessionId String?
+  cashSession   CashSession? @relation(fields: [cashSessionId], references: [id])
+
+  notes String?
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  entries LedgerEntry[]
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
 }
 
 // ─── Inventario ───────────────────────────────────────────────────────────────
@@ -130,16 +390,20 @@ enum ItemStatus {
   SOLD
   RESERVED
   DEFECTIVE
+  IN_TRANSIT // poblado mientras currentTransferId apunta a un StockTransfer sin recibir
 }
 
 model InventoryItem {
-  id          String     @id @default(cuid())
-  imei        String
-  condition   Condition  @default(NEW)
-  status      ItemStatus @default(AVAILABLE)
-  costPrice   Decimal      @db.Decimal(10, 2)
-  salePrice   Decimal      @db.Decimal(10, 2)
-  currency    SaleCurrency @default(ARS)
+  id        String     @id @default(cuid())
+  imei      String
+  condition Condition  @default(NEW)
+  status    ItemStatus @default(AVAILABLE)
+  costPrice Decimal    @db.Decimal(10, 2)
+  salePrice Decimal    @db.Decimal(10, 2)
+
+  currencyCode String   @default("ARS")
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
   accessories String[]
   notes       String?
 
@@ -152,12 +416,25 @@ model InventoryItem {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
+  // Sucursal donde físicamente está el equipo. Obligatorio — reemplaza el
+  // supuesto implícito anterior de "todo el stock del tenant está en un solo
+  // lugar". Ver regla de negocio junto a Sale: una venta no puede incluir un
+  // item de otra tienda ni uno IN_TRANSIT (no implementado todavía).
+  tiendaId String
+  tienda   Tienda @relation(fields: [tiendaId], references: [id])
+
+  // Poblado solo mientras status=IN_TRANSIT — el StockTransfer que está
+  // moviendo este item entre sucursales. Null en cualquier otro estado.
+  currentTransferId String?
+  currentTransfer   StockTransfer? @relation(fields: [currentTransferId], references: [id])
+
   saleItems SaleItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([imei, tenantId])
+  @@index([tenantId, tiendaId])
 }
 
 model Supplier {
@@ -182,6 +459,53 @@ model Supplier {
   @@unique([name, tenantId])
 }
 
+// ─── Transferencias entre sucursales ──────────────────────────────────────────
+// Mueve InventoryItem de una Tienda a otra. Mientras el traslado está en
+// curso (status=IN_TRANSIT) el/los InventoryItem trasladados tienen
+// status=IN_TRANSIT y currentTransferId apuntando a esta fila — no
+// pertenecen ni al stock de origen ni al de destino hasta que se confirma
+// la recepción (receivedById + receivedAt poblados, status=RECEIVED), momento
+// en el que InventoryItem.tiendaId pasa a ser toTiendaId y vuelve a
+// status=AVAILABLE. Lógica de transición NO implementada todavía (próxima
+// etapa) — este modelo es solo el shape de datos.
+enum TransferStatus {
+  IN_TRANSIT
+  RECEIVED
+  CANCELLED
+}
+
+model StockTransfer {
+  id     String         @id @default(cuid())
+  status TransferStatus @default(IN_TRANSIT)
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  fromTiendaId String
+  fromTienda   Tienda @relation("StockTransferFrom", fields: [fromTiendaId], references: [id])
+  toTiendaId   String
+  toTienda     Tienda @relation("StockTransferTo", fields: [toTiendaId], references: [id])
+
+  // Items trasladados por este movimiento (solo mientras están IN_TRANSIT
+  // apuntan acá vía InventoryItem.currentTransferId — ver comentario ahí).
+  items InventoryItem[]
+
+  dispatchedById String
+  dispatchedBy   User   @relation("StockTransferDispatcher", fields: [dispatchedById], references: [id])
+
+  receivedById String?
+  receivedBy   User?   @relation("StockTransferReceiver", fields: [receivedById], references: [id])
+
+  notes String?
+
+  createdAt  DateTime  @default(now())
+  receivedAt DateTime?
+
+  @@index([tenantId])
+  @@index([fromTiendaId])
+  @@index([toTiendaId])
+}
+
 // ─── Punto de Venta ───────────────────────────────────────────────────────────
 
 enum PaymentMethod {
@@ -191,28 +515,29 @@ enum PaymentMethod {
   INSTALLMENTS
 }
 
-enum ExchangeType {
-  BLUE
-  USDT
-  NONE
-}
+// ExchangeType eliminado — reemplazado por Sale.referenceRateId (FK trazable
+// a la fila real de ExchangeRate usada, en vez de una etiqueta suelta).
 
-enum SaleCurrency {
-  ARS
-  USD
-  USDT
-}
-
+// REGLA DE NEGOCIO — pendiente de implementar (próxima etapa, NO validado
+// todavía a nivel de controller): una Sale no puede incluir un InventoryItem
+// cuyo tiendaId sea distinto al tiendaId de la propia Sale, ni uno cuyo
+// status sea IN_TRANSIT. El stock vendido siempre tiene que estar físicamente
+// disponible en la misma sucursal donde se hace la venta.
 model Sale {
   id            String        @id @default(cuid())
   total         Decimal       @db.Decimal(10, 2)
   paymentMethod PaymentMethod
-  currency      SaleCurrency  @default(ARS)
+
+  currencyCode String   @default("ARS")
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
   customerName  String?
   customerPhone String?
   notes         String?
-  exchangeRate  Float?
-  exchangeType  ExchangeType?
+
+  exchangeRate    Decimal?      @db.Decimal(18, 6)
+  referenceRateId String?
+  referenceRate   ExchangeRate? @relation("SaleReferenceRate", fields: [referenceRateId], references: [id])
 
   sellerId String
   seller   User   @relation(fields: [sellerId], references: [id])
@@ -220,17 +545,31 @@ model Sale {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  items        SaleItem[]
-  cashMovement CashMovement?
+  // Sucursal donde se hizo la venta. Obligatorio. Ver regla de negocio arriba.
+  tiendaId String
+  tienda   Tienda @relation(fields: [tiendaId], references: [id])
+
+  items         SaleItem[]
+  cashMovement  CashMovement?
+  ledgerEntries LedgerEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([tenantId, tiendaId])
 }
 
 model SaleItem {
   id        String  @id @default(cuid())
-  salePrice Decimal @db.Decimal(10, 2)
-  costPrice Decimal @db.Decimal(10, 2)
+  salePrice Decimal @db.Decimal(10, 2) // ya convertido a Sale.currency
+  costPrice Decimal @db.Decimal(10, 2) // ya convertido a Sale.currency
+
+  // Snapshot del precio del InventoryItem en SU moneda original, antes de
+  // cualquier conversión. Antes este dato se perdía por completo.
+  originalCurrencyCode String
+  originalCurrency     Currency @relation(fields: [originalCurrencyCode], references: [code])
+  originalSalePrice    Decimal  @db.Decimal(10, 2)
+  originalCostPrice    Decimal  @db.Decimal(10, 2)
 
   saleId String
   sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
@@ -242,6 +581,7 @@ model SaleItem {
 }
 
 // ─── Reparaciones ─────────────────────────────────────────────────────────────
+// (sin cambios — no depende de moneda unificada, budget queda como está)
 
 model Customer {
   id    String  @id @default(cuid())
@@ -283,13 +623,13 @@ enum FaultType {
 }
 
 model RepairOrder {
-  id            String @id @default(cuid())
-  customerName  String
-  customerPhone String
-  deviceModel   String
-  deviceColor   String?
-  deviceImei    String?
-  faultType     FaultType
+  id               String    @id @default(cuid())
+  customerName     String
+  customerPhone    String
+  deviceModel      String
+  deviceColor      String?
+  deviceImei       String?
+  faultType        FaultType
   faultDescription String
 
   status        RepairStatus @default(RECEIVED)
@@ -323,10 +663,13 @@ enum PurchaseStatus {
 }
 
 model PurchaseOrder {
-  id         String         @id @default(cuid())
-  status     PurchaseStatus @default(PENDING)
-  total      Decimal        @db.Decimal(10, 2)
-  currency   SaleCurrency   @default(ARS)
+  id     String         @id @default(cuid())
+  status PurchaseStatus @default(PENDING)
+  total  Decimal        @db.Decimal(10, 2)
+
+  currencyCode String   @default("ARS")
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
   notes      String?
   receivedAt DateTime?
 
@@ -336,10 +679,25 @@ model PurchaseOrder {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  items PurchaseOrderItem[]
+  // Sucursal que recibe la mercadería. Opcional — se completa recién al
+  // marcar la orden RECEIVED (ver backfill), no existe todavía al crearla
+  // PENDING porque en ese momento no se sabe con certeza a qué sucursal va
+  // a ingresar el stock.
+  tiendaId String?
+  tienda   Tienda? @relation(fields: [tiendaId], references: [id])
+
+  items         PurchaseOrderItem[]
+  ledgerEntries LedgerEntry[]
+  // Pagos reales contra la deuda de esta orden (seña + saldo, uno o más,
+  // cada uno con su propio origen) — ver modelo SupplierPayment. La orden en
+  // sí no guarda "pagado"/"pendiente": se calculan siempre desde esta
+  // relación (suppliers.controller.js, serializeOrder).
+  payments      SupplierPayment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([tenantId, tiendaId])
 }
 
 model PurchaseOrderItem {
@@ -348,10 +706,69 @@ model PurchaseOrderItem {
   quantity    Int
   unitPrice   Decimal @db.Decimal(10, 2)
 
+  // Snapshot de la moneda pactada para este ítem al momento del pedido (antes
+  // heredaba implícitamente la de PurchaseOrder; no hay "precio original de
+  // InventoryItem" acá porque el equipo todavía no existe).
+  currencyCode String
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
   orderId String
   order   PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+}
+
+// ─── Pagos a proveedores ───────────────────────────────────────────────────────
+// Independiente del status de PurchaseOrder (PENDING o RECEIVED, no importa
+// — son eventos separados, ver comentario en PurchaseOrder.payments). Cada
+// fila es un pago parcial real (seña, saldo, o cualquier otro parcial) contra
+// PurchaseOrder.total. "Pagado"/"pendiente" NUNCA se guardan como campo —
+// siempre se calculan sumando estas filas (suppliers.controller.js).
+
+enum PaymentSource {
+  CASH_REGISTER // sale de una caja del local — requiere tiendaId + caja abierta ahí
+  EXTERNAL // sale de una cuenta externa a la empresa — no toca ninguna caja
+}
+
+model SupplierPayment {
+  id     String  @id @default(cuid())
+  amount Decimal @db.Decimal(10, 2)
+
+  currencyCode String
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
+  source PaymentSource
+
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  // Obligatorio SOLO si source=CASH_REGISTER (de qué caja/sucursal salió la
+  // plata) — null si es EXTERNAL, no hay sucursal involucrada. No lo valida
+  // el schema (Prisma no tiene constraints condicionales); lo valida
+  // suppliers.controller.js antes de crear la fila.
+  tiendaId String?
+  tienda   Tienda? @relation(fields: [tiendaId], references: [id])
+
+  // Poblado únicamente cuando source=CASH_REGISTER — el CashMovement real
+  // que restó este pago de la caja de esa sucursal. Null si es EXTERNAL.
+  cashMovementId String?       @unique
+  cashMovement   CashMovement? @relation(fields: [cashMovementId], references: [id])
+
+  paidAt DateTime @default(now())
+
+  paidById String
+  paidBy   User   @relation(fields: [paidById], references: [id])
+
+  notes String?
+
+  ledgerEntries LedgerEntry[]
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, purchaseOrderId])
 }
 
 // ─── Caja ─────────────────────────────────────────────────────────────────────
@@ -362,46 +779,70 @@ enum MovementType {
 }
 
 model CashSession {
-  id               String   @id @default(cuid())
-  initialAmountARS Decimal  @db.Decimal(10, 2) @default(0)
-  initialAmountUSD Decimal  @db.Decimal(10, 2) @default(0)
-  finalAmount      Decimal? @db.Decimal(10, 2)
-  openedAt      DateTime  @default(now())
-  closedAt      DateTime?
-  notes         String?
+  // Se eliminan initialAmountARS, initialAmountUSD, finalAmount. El saldo
+  // inicial por moneda es un LedgerEntry (type=SESSION_OPEN) por moneda
+  // ingresada al abrir. El saldo final se calcula siempre on-demand desde
+  // LedgerEntry; si al cerrar hay diferencia entre lo contado y lo calculado,
+  // se registra como LedgerEntry type=SESSION_CLOSE_ADJUSTMENT (ajuste
+  // explícito, no un número pisado).
+  id       String    @id @default(cuid())
+  openedAt DateTime  @default(now())
+  closedAt DateTime?
+  notes    String?
 
   openedById String
   openedBy   User   @relation("CashOpened", fields: [openedById], references: [id])
 
   closedById String?
-  closedBy   User?  @relation("CashClosed", fields: [closedById], references: [id])
+  closedBy   User?   @relation("CashClosed", fields: [closedById], references: [id])
 
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  movements CashMovement[]
+  // Sucursal donde se abrió esta caja. Obligatorio.
+  tiendaId String
+  tienda   Tienda @relation(fields: [tiendaId], references: [id])
+
+  movements     CashMovement[]
+  ledgerEntries LedgerEntry[]
+  conversions   Conversion[]
+
+  @@index([tenantId, tiendaId])
 }
 
 model CashMovement {
-  id            String        @id @default(cuid())
-  type          MovementType
-  amount        Decimal       @db.Decimal(10, 2)
-  currency      SaleCurrency  @default(ARS)
-  exchangeRate  Decimal?      @db.Decimal(10, 2)
+  id     String       @id @default(cuid())
+  type   MovementType
+  amount Decimal      @db.Decimal(10, 2)
+
+  currencyCode String   @default("ARS")
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
+  exchangeRate    Decimal?      @db.Decimal(18, 6)
+  referenceRateId String?
+  referenceRate   ExchangeRate? @relation("CashMovementReferenceRate", fields: [referenceRateId], references: [id])
+
   description   String
   paymentMethod PaymentMethod
 
   sessionId String
   session   CashSession @relation(fields: [sessionId], references: [id])
 
-  saleId String?  @unique
-  sale   Sale?    @relation(fields: [saleId], references: [id])
+  saleId String? @unique
+  sale   Sale?   @relation(fields: [saleId], references: [id])
 
   createdById String
   createdBy   User   @relation("CashMovementCreator", fields: [createdById], references: [id])
 
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  ledgerEntries LedgerEntry[]
+
+  // Back-relation del lado FK único en SupplierPayment.cashMovementId — un
+  // pago a proveedor desde caja (source=CASH_REGISTER) genera exactamente
+  // uno de estos, igual patrón que Sale/saleId más arriba.
+  supplierPayment SupplierPayment?
 
   createdAt DateTime @default(now())
 }
@@ -421,22 +862,37 @@ model RepairStatusHistory {
 }
 
 // ─── Admin / Pagos ────────────────────────────────────────────────────────────
+// Payment = pago de suscripción tenant → Vexio (billing del SaaS, no caja de
+// la tienda). Entra al mismo LedgerEntry (type=SUBSCRIPTION_PAYMENT) para que
+// toda plata que se mueve viva en un único lugar, filtrable por type.
+// Ver regla de balance sobre SUBSCRIPTION_PAYMENT en el comentario de
+// LedgerEntry — no debe aparecer en balances/reportes del tenant, solo en
+// vistas de Admin/Billing.
 
-enum PaymentCurrency {
-  USD
-  PESOS
-  USDT
+// Sin esto, "cuánto facturé este mes" mezclaba cobros de implementación
+// (pago único, grande) con mensualidades (recurrente, chico) — mismo tipo de
+// bug que el resto del proyecto, a nivel de la facturación de Vexio mismo.
+enum PaymentType {
+  IMPLEMENTATION
+  MONTHLY
 }
 
 model Payment {
-  id       String          @id @default(cuid())
-  amount   Decimal         @db.Decimal(10, 2)
-  currency PaymentCurrency
-  paidAt   DateTime
-  notes    String?
+  id     String  @id @default(cuid())
+  amount Decimal @db.Decimal(10, 2)
+
+  currencyCode String
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
+  paymentType PaymentType
+
+  paidAt DateTime
+  notes  String?
 
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  ledgerEntries LedgerEntry[]
 
   createdAt DateTime @default(now())
 }

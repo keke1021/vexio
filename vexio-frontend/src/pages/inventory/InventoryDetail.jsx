@@ -15,6 +15,14 @@ const CONDITION_OPTIONS = Object.entries(CONDITIONS).map(([v, l]) => ({ value: v
 const formatCurrency = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
 
+const formatGeneric = (n, code) =>
+  `${code} ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)}`;
+
+// Antes Costo/Precio de venta/Ganancia se mostraban siempre en pesos
+// (formatCurrency fijo) sin importar la moneda real del ítem, y la moneda
+// ni siquiera aparecía en ningún lado de esta página.
+const formatByCurrency = (n, code) => (code === 'ARS' ? formatCurrency(n) : formatGeneric(n, code));
+
 const formatDateTime = (d) =>
   new Date(d).toLocaleString('es-AR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
@@ -143,9 +151,10 @@ const InventoryDetail = () => {
         </Row>
         <Row label="Condición">{CONDITIONS[item.condition]}</Row>
         <Row label="Estado">{STATUS_OPTIONS.find((s) => s.value === item.status)?.label ?? item.status}</Row>
-        <Row label="Costo">{formatCurrency(item.costPrice)}</Row>
-        <Row label="Precio de venta">{formatCurrency(item.salePrice)}</Row>
-        <Row label="Ganancia">{formatCurrency(item.salePrice - item.costPrice)}</Row>
+        <Row label="Moneda">{item.currencyCode ?? 'ARS'}</Row>
+        <Row label="Costo">{formatByCurrency(item.costPrice, item.currencyCode)}</Row>
+        <Row label="Precio de venta">{formatByCurrency(item.salePrice, item.currencyCode)}</Row>
+        <Row label="Ganancia">{formatByCurrency(item.salePrice - item.costPrice, item.currencyCode)}</Row>
         <Row label="Proveedor">{item.supplier?.name ?? '—'}</Row>
         <Row label="Stock del modelo">
           {item.stockCount} {item.stockCount === 1 ? 'unidad disponible' : 'unidades disponibles'}

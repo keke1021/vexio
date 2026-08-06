@@ -3,12 +3,6 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { PrismaClient } = require('@prisma/client');
 
-const PLAN_MODULES = {
-  STARTER: ['inventory', 'pos', 'customers'],
-  PRO:     ['inventory', 'pos', 'customers', 'repairs', 'cash', 'suppliers', 'warranties'],
-  FULL:    ['inventory', 'pos', 'customers', 'repairs', 'cash', 'suppliers', 'warranties', 'whatsapp', 'reports', 'multibranch'],
-};
-
 const prisma = new PrismaClient();
 
 // --- Helpers ---
@@ -30,72 +24,17 @@ const getRefreshTokenExpiry = () => {
 
 /**
  * POST /api/auth/register
- * Registra una nueva tienda (Tenant) y crea el usuario OWNER.
+ * DESHABILITADO — decisión de negocio (2026-08-06): el registro público de
+ * tenants queda cerrado. Ezequiel es el único que crea cuentas de clientes,
+ * siempre desde el panel de Admin (POST /api/admin/tenants → createTenant,
+ * admin.controller.js), que llama a createTenantWithOwner
+ * (utils/tenantOnboarding.js) directamente — ese helper compartido sigue
+ * intacto y funcionando, solo se cerró esta puerta de entrada pública.
  */
 const register = async (req, res) => {
-  try {
-    const { tenantName, tenantSlug, email, password, name } = req.body;
-
-    if (!tenantName || !tenantSlug || !email || !password || !name) {
-      return res.status(400).json({ message: 'Todos los campos son requeridos.' });
-    }
-
-    const existingTenant = await prisma.tenant.findUnique({
-      where: { slug: tenantSlug },
-    });
-
-    if (existingTenant) {
-      return res.status(409).json({ message: 'El slug de tienda ya está en uso.' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    const { tenant, user } = await prisma.$transaction(async (tx) => {
-      const tenant = await tx.tenant.create({
-        data: {
-          name: tenantName,
-          slug: tenantSlug,
-          email,
-          activeModules: PLAN_MODULES.STARTER,
-        },
-      });
-
-      const user = await tx.user.create({
-        data: {
-          email,
-          password: hashedPassword,
-          name,
-          role: 'OWNER',
-          tenantId: tenant.id,
-        },
-      });
-
-      return { tenant, user };
-    });
-
-    const accessToken = generateAccessToken({
-      userId: user.id,
-      tenantId: tenant.id,
-      role: user.role,
-    });
-
-    const refreshToken = generateRefreshToken();
-
-    await prisma.refreshToken.create({
-      data: { token: refreshToken, userId: user.id, expiresAt: getRefreshTokenExpiry() },
-    });
-
-    return res.status(201).json({
-      message: 'Tienda registrada exitosamente.',
-      accessToken,
-      refreshToken,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
-      tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug, activeModules: tenant.activeModules ?? [] },
-    });
-  } catch (error) {
-    console.error('[register]', error);
-    return res.status(500).json({ message: 'Error interno del servidor.' });
-  }
+  return res.status(403).json({
+    message: 'El registro público está deshabilitado, contactá al administrador.',
+  });
 };
 
 /**

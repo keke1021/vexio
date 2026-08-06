@@ -22,8 +22,21 @@ const getMarginColor = (m) => {
   return 'text-red-500';
 };
 
+const CURRENCY_BADGE_CLS = {
+  ARS:  'bg-[#F1F5F9] text-[#64748B]',
+  USD:  'bg-[#DCFCE7] text-[#16A34A]',
+  USDT: 'bg-[#DBEAFE] text-[#2563EB]',
+};
+
 const formatCurrency = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
+
+const formatGeneric = (n, code) =>
+  `${code} ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)}`;
+
+// Antes esta columna mostraba formatCurrency (pesos) sin mirar la moneda
+// real del ítem — un equipo en USD/USDT se veía con el símbolo $ de ARS.
+const formatByCurrency = (n, code) => (code === 'ARS' ? formatCurrency(n) : formatGeneric(n, code));
 
 const formatDate = (d) =>
   new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
@@ -60,8 +73,9 @@ const AlertsBanner = () => {
 
 // ─── Bulk Upload Modal ────────────────────────────────────────────────────────
 
-const BulkUploadModal = ({ onClose, onSuccess }) => {
+const BulkUploadModal = ({ tiendas, onClose, onSuccess }) => {
   const [file, setFile] = useState(null);
+  const [tiendaId, setTiendaId] = useState(tiendas.length === 1 ? tiendas[0].id : '');
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState(null);
@@ -79,7 +93,7 @@ const BulkUploadModal = ({ onClose, onSuccess }) => {
   };
 
   const handleUpload = async () => {
-    if (!file) return;
+    if (!file || !tiendaId) return;
     setUploading(true);
     setProgress(10);
 
@@ -90,6 +104,7 @@ const BulkUploadModal = ({ onClose, onSuccess }) => {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('tiendaId', tiendaId);
       const { data } = await api.post('/inventory/bulk-upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -123,6 +138,31 @@ const BulkUploadModal = ({ onClose, onSuccess }) => {
 
         {!result ? (
           <>
+            {tiendas.length > 1 && (
+              <div className="border border-[#E2E8F0] rounded-xl p-4 mb-3">
+                <p className="text-[13px] text-[#0F172A] font-medium mb-2">Sucursal que recibe la carga</p>
+                <select
+                  value={tiendaId}
+                  onChange={(e) => setTiendaId(e.target.value)}
+                  className="w-full bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#64748B]
+                    focus:outline-none focus:border-[#3B82F6] transition-all"
+                >
+                  <option value="">Seleccioná una sucursal</option>
+                  {tiendas.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {tiendas.length === 0 && (
+              <div className="border border-amber-200 bg-amber-50 rounded-xl p-4 mb-3">
+                <p className="text-[13px] text-amber-600">
+                  Todavía no hay ninguna sucursal creada — hace falta al menos una para poder cargar equipos.
+                </p>
+              </div>
+            )}
+
             <div className="border border-[#E2E8F0] rounded-xl p-4 mb-3">
               <p className="text-[13px] text-[#0F172A] font-medium mb-1">1. Descargá la plantilla</p>
               <p className="text-[12px] text-[#94A3B8] mb-3">
@@ -174,7 +214,7 @@ const BulkUploadModal = ({ onClose, onSuccess }) => {
               </button>
               <button
                 onClick={handleUpload}
-                disabled={!file || uploading}
+                disabled={!file || !tiendaId || uploading}
                 className="bg-[#3B82F6] hover:bg-[#2563EB] disabled:opacity-40 disabled:cursor-not-allowed
                   text-white text-[13px] font-medium px-4 py-2 rounded-lg transition-colors"
               >
@@ -242,25 +282,56 @@ const InventoryList = () => {
   const queryClient = useQueryClient();
   const canWrite = ['OWNER', 'ADMIN'].includes(user?.role);
 
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const PAGE_SIZE = 50;
+
+  // Modelo e IMEI son dos campos separados a propósito — antes un único
+  // "search" hacía OR parcial contra los dos, y buscar "16" (para "iPhone
+  // 16") también traía cualquier IMEI que tuviera "16" en el medio.
+  const [modeloSearch, setModeloSearch] = useState('');
+  const [debouncedModelo, setDebouncedModelo] = useState('');
+  const [imeiSearch, setImeiSearch] = useState('');
+  const [debouncedImei, setDebouncedImei] = useState('');
   const [condition, setCondition] = useState('');
   const [status, setStatus] = useState('');
+  const [tiendaId, setTiendaId] = useState('');
+  const [page, setPage] = useState(1);
   const [showBulkModal, setShowBulkModal] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    const t = setTimeout(() => setDebouncedModelo(modeloSearch), 300);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [modeloSearch]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedImei(imeiSearch), 300);
+    return () => clearTimeout(t);
+  }, [imeiSearch]);
+
+  // Cualquier cambio de filtro vuelve a la página 1 — si no, se puede quedar
+  // "parado" en una página 4 que ya no existe para el filtro nuevo.
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedModelo, debouncedImei, condition, status, tiendaId]);
+
+  const { data: tiendasData } = useQuery({
+    queryKey: ['tiendas'],
+    queryFn: () => api.get('/tiendas').then((r) => r.data),
+    staleTime: 5 * 60_000,
+  });
+  const tiendas = tiendasData?.tiendas ?? [];
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['inventory', debouncedSearch, condition, status],
+    queryKey: ['inventory', debouncedModelo, debouncedImei, condition, status, tiendaId, page],
     queryFn: () =>
       api.get('/inventory', {
         params: {
-          search: debouncedSearch || undefined,
+          modelo: debouncedModelo || undefined,
+          imei: debouncedImei || undefined,
           condition: condition || undefined,
           status: status || undefined,
+          tiendaId: tiendaId || undefined,
+          page,
+          pageSize: PAGE_SIZE,
         },
       }).then((r) => r.data),
     staleTime: 30_000,
@@ -276,6 +347,9 @@ const InventoryList = () => {
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, total);
 
   const handleBulkSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -289,7 +363,9 @@ const InventoryList = () => {
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Inventario</h1>
           <p className="text-[13px] text-[#94A3B8] mt-0.5">
-            {isLoading ? '...' : `${total} equipo${total !== 1 ? 's' : ''}`}
+            {isLoading ? '...' : total === 0
+              ? '0 equipos'
+              : `Mostrando ${rangeStart}-${rangeEnd} de ${total} equipo${total !== 1 ? 's' : ''}`}
           </p>
         </div>
         {canWrite && (
@@ -316,11 +392,19 @@ const InventoryList = () => {
       <div className="flex flex-wrap gap-3 mb-5">
         <input
           type="text"
-          placeholder="Buscar IMEI o modelo..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por modelo..."
+          value={modeloSearch}
+          onChange={(e) => setModeloSearch(e.target.value)}
           className="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#0F172A]
-            placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-colors w-56"
+            placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-colors w-48"
+        />
+        <input
+          type="text"
+          placeholder="Buscar por IMEI..."
+          value={imeiSearch}
+          onChange={(e) => setImeiSearch(e.target.value)}
+          className="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#0F172A] font-mono
+            placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-colors w-48"
         />
         <select
           value={condition}
@@ -344,6 +428,19 @@ const InventoryList = () => {
           <option value="SOLD">Vendido</option>
           <option value="RESERVED">Reservado</option>
         </select>
+        {tiendas.length > 1 && (
+          <select
+            value={tiendaId}
+            onChange={(e) => setTiendaId(e.target.value)}
+            className="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#64748B]
+              focus:outline-none focus:border-[#3B82F6] transition-colors"
+          >
+            <option value="">Todas las sucursales</option>
+            {tiendas.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white"
@@ -354,6 +451,9 @@ const InventoryList = () => {
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">IMEI</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Modelo</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Condición</th>
+              {tiendas.length > 1 && (
+                <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Sucursal</th>
+              )}
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Estado</th>
               <th className="text-right px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Precio</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Moneda</th>
@@ -365,17 +465,17 @@ const InventoryList = () => {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={9} className="text-center py-16 text-[#CBD5E1] text-[13px]">Cargando...</td>
+                <td colSpan={tiendas.length > 1 ? 10 : 9} className="text-center py-16 text-[#CBD5E1] text-[13px]">Cargando...</td>
               </tr>
             )}
             {isError && (
               <tr>
-                <td colSpan={9} className="text-center py-16 text-red-400 text-[13px]">Error al cargar el inventario.</td>
+                <td colSpan={tiendas.length > 1 ? 10 : 9} className="text-center py-16 text-red-400 text-[13px]">Error al cargar el inventario.</td>
               </tr>
             )}
             {!isLoading && !isError && items.length === 0 && (
               <tr>
-                <td colSpan={9} className="text-center py-16 text-[#CBD5E1] text-[13px]">No hay equipos que coincidan con los filtros.</td>
+                <td colSpan={tiendas.length > 1 ? 10 : 9} className="text-center py-16 text-[#CBD5E1] text-[13px]">No hay equipos que coincidan con los filtros.</td>
               </tr>
             )}
             {items.map((item) => {
@@ -396,21 +496,24 @@ const InventoryList = () => {
                   <td className="px-4 py-3.5 text-[#64748B] hidden md:table-cell">
                     {CONDITIONS[item.condition]}
                   </td>
+                  {tiendas.length > 1 && (
+                    <td className="px-4 py-3.5 text-[#94A3B8] hidden md:table-cell">
+                      {item.tienda?.name ?? '—'}
+                    </td>
+                  )}
                   <td className="px-4 py-3.5">
                     <span className={`inline-flex px-2 py-0.5 rounded-md text-[11px] font-medium ${badge.cls}`}>
                       {badge.label}
                     </span>
                   </td>
                   <td className="px-4 py-3.5 text-right text-[#64748B] hidden lg:table-cell">
-                    {formatCurrency(item.salePrice)}
+                    {formatByCurrency(item.salePrice, item.currencyCode ?? 'ARS')}
                   </td>
                   <td className="px-4 py-3.5 hidden lg:table-cell">
                     <span className={`inline-flex px-2 py-0.5 rounded-md text-[11px] font-medium ${
-                      item.currency === 'USD'
-                        ? 'bg-[#DCFCE7] text-[#16A34A]'
-                        : 'bg-[#F1F5F9] text-[#64748B]'
+                      CURRENCY_BADGE_CLS[item.currencyCode] ?? CURRENCY_BADGE_CLS.ARS
                     }`}>
-                      {item.currency ?? 'ARS'}
+                      {item.currencyCode ?? 'ARS'}
                     </span>
                   </td>
                   <td className={`px-4 py-3.5 text-right font-medium hidden lg:table-cell ${getMarginColor(item.margin)}`}>
@@ -429,8 +532,37 @@ const InventoryList = () => {
         </table>
       </div>
 
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-[12px] text-[#94A3B8]">
+            Página {page} de {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(p - 1, 1))}
+              disabled={page <= 1}
+              className="border border-[#E2E8F0] text-[#64748B] hover:bg-[#F8FAFC]
+                text-[13px] font-medium px-3 py-1.5 rounded-lg transition-colors
+                disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ← Anterior
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+              disabled={page >= totalPages}
+              className="border border-[#E2E8F0] text-[#64748B] hover:bg-[#F8FAFC]
+                text-[13px] font-medium px-3 py-1.5 rounded-lg transition-colors
+                disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Siguiente →
+            </button>
+          </div>
+        </div>
+      )}
+
       {showBulkModal && (
         <BulkUploadModal
+          tiendas={tiendas}
           onClose={() => setShowBulkModal(false)}
           onSuccess={handleBulkSuccess}
         />

@@ -17,8 +17,17 @@ const PAYMENT_COLORS = {
   INSTALLMENTS: 'text-orange-500',
 };
 
+const CURRENCIES = ['ARS', 'USD', 'USDT'];
+
 const formatCurrency = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
+
+const fmtGeneric = (n, code) =>
+  `${code} ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0)}`;
+
+// La fila de cada venta mostraba formatCurrency (pesos) sin mirar la moneda
+// real — una venta en USD/USDT aparecía con el símbolo $ como si fuera ARS.
+const fmtByCurrency = (n, code) => (code === 'ARS' ? formatCurrency(n) : fmtGeneric(n, code));
 
 const formatTime = (d) =>
   new Date(d).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
@@ -123,15 +132,25 @@ const PosSales = () => {
 
       {!isLoading && summary.salesCount > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          <SummaryCard label="Total" value={formatCurrency(summary.totalAmount)} sub={`${summary.salesCount} ventas`} />
-          {Object.entries(summary.byPaymentMethod ?? {}).map(([pm, data]) => (
+          {/* Un total por moneda — nunca un número único mezclando ARS/USD/USDT */}
+          {CURRENCIES.filter((c) => summary.byCurrency?.[c]).map((cur) => (
             <SummaryCard
-              key={pm}
-              label={PAYMENT_LABELS[pm]}
-              value={formatCurrency(data.total)}
-              sub={`${data.count} venta${data.count !== 1 ? 's' : ''}`}
+              key={cur}
+              label={`Total ${cur}`}
+              value={fmtByCurrency(summary.byCurrency[cur].total, cur)}
+              sub={`${summary.byCurrency[cur].count} venta${summary.byCurrency[cur].count !== 1 ? 's' : ''}`}
             />
           ))}
+          {Object.entries(summary.byPaymentMethod ?? {}).flatMap(([pm, byCur]) =>
+            Object.entries(byCur).map(([cur, data]) => (
+              <SummaryCard
+                key={`${pm}-${cur}`}
+                label={`${PAYMENT_LABELS[pm]} · ${cur}`}
+                value={fmtByCurrency(data.total, cur)}
+                sub={`${data.count} venta${data.count !== 1 ? 's' : ''}`}
+              />
+            ))
+          )}
         </div>
       )}
 
@@ -187,7 +206,7 @@ const PosSales = () => {
                   {sale._count?.items ?? 0}
                 </td>
                 <td className="px-4 py-3.5 text-right font-medium text-[#0F172A]">
-                  {formatCurrency(sale.total)}
+                  {fmtByCurrency(sale.total, sale.currencyCode)}
                 </td>
               </tr>
             ))}

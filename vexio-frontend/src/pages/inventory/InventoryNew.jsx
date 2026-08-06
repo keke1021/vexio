@@ -63,9 +63,10 @@ const InventoryNew = () => {
     imei: '',
     condition: 'NEW',
     costPrice: '',
-    currency: 'ARS',
+    currencyCode: 'ARS',
     salePrice: '',
     supplierId: '',
+    tiendaId: '',
     accessories: [],
     notes: '',
   });
@@ -81,6 +82,23 @@ const InventoryNew = () => {
     queryFn: () => api.get('/suppliers').then((r) => r.data),
     staleTime: 5 * 60_000,
   });
+
+  const { data: tiendasData } = useQuery({
+    queryKey: ['tiendas'],
+    queryFn: () => api.get('/tiendas').then((r) => r.data),
+    staleTime: 5 * 60_000,
+  });
+  const tiendas = tiendasData?.tiendas ?? [];
+
+  // Si el tenant tiene una sola sucursal (caso más común hoy), la
+  // preseleccionamos sola — no tiene sentido pedirle al usuario que elija
+  // entre una sola opción.
+  useEffect(() => {
+    if (tiendas.length === 1 && !form.tiendaId) {
+      setForm((prev) => ({ ...prev, tiendaId: tiendas[0].id }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiendas.length]);
 
   const set = (key) => (e) => {
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
@@ -145,7 +163,7 @@ const InventoryNew = () => {
       <form onSubmit={handleSubmit} className="space-y-7">
 
         <div>
-          <Label>IMEI</Label>
+          <Label>IMEI (opcional)</Label>
           <div className="relative">
             <Input
               ref={imeiRef}
@@ -156,7 +174,6 @@ const InventoryNew = () => {
               onBlur={(e) => validateImei(e.target.value)}
               className="font-mono pr-20"
               maxLength={15}
-              required
             />
             {form.imei && (
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#CBD5E1]">
@@ -225,17 +242,17 @@ const InventoryNew = () => {
         <div>
           <Label>Precios</Label>
           <div className="flex gap-1.5 mb-3">
-            {['ARS', 'USD'].map((cur) => (
+            {['ARS', 'USD', 'USDT'].map((cur) => (
               <button
                 key={cur}
                 type="button"
-                onClick={() => setForm((p) => ({ ...p, currency: cur }))}
+                onClick={() => setForm((p) => ({ ...p, currencyCode: cur }))}
                 className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all ${
-                  form.currency === cur
+                  form.currencyCode === cur
                     ? 'text-white border-transparent'
                     : 'bg-white border-[#E2E8F0] text-[#94A3B8] hover:text-[#64748B]'
                 }`}
-                style={form.currency === cur ? { backgroundColor: '#1E3A5F' } : {}}
+                style={form.currencyCode === cur ? { backgroundColor: '#1E3A5F' } : {}}
               >
                 {cur}
               </button>
@@ -252,7 +269,7 @@ const InventoryNew = () => {
                 step="0.01"
                 required
               />
-              <p className="mt-1 text-[11px] text-[#CBD5E1]">Costo ({form.currency})</p>
+              <p className="mt-1 text-[11px] text-[#CBD5E1]">Costo ({form.currencyCode})</p>
             </div>
             <div className="flex-1 min-w-0">
               <Input
@@ -264,7 +281,7 @@ const InventoryNew = () => {
                 step="0.01"
                 required
               />
-              <p className="mt-1 text-[11px] text-[#CBD5E1]">Precio de venta ({form.currency})</p>
+              <p className="mt-1 text-[11px] text-[#CBD5E1]">Precio de venta ({form.currencyCode})</p>
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2">
@@ -274,6 +291,24 @@ const InventoryNew = () => {
             </span>
           </div>
         </div>
+
+        {tiendas.length > 1 && (
+          <div>
+            <Label>Sucursal</Label>
+            <Select value={form.tiendaId} onChange={set('tiendaId')} required>
+              <option value="">Seleccioná una sucursal</option>
+              {tiendas.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </Select>
+          </div>
+        )}
+
+        {tiendas.length === 0 && (
+          <p className="text-[13px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+            Todavía no hay ninguna sucursal creada — hace falta al menos una para poder cargar equipos.
+          </p>
+        )}
 
         <div>
           <Label>Proveedor</Label>
@@ -325,7 +360,7 @@ const InventoryNew = () => {
         <div className="flex items-center gap-3 pt-2">
           <button
             type="submit"
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || !form.tiendaId}
             className="bg-[#3B82F6] hover:bg-[#2563EB] text-white text-[13px] font-medium px-6 py-2.5
               rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >

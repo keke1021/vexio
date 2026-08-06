@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const { reduceLedgerByCurrency, TENANT_BALANCE_EXCLUDED_TYPES } = require('../utils/ledger');
 
 const prisma = new PrismaClient();
 
@@ -19,7 +20,16 @@ const buildDateFilter = (from, to) => {
 
 /**
  * GET /api/reports/sales?from=&to=
- * Total, ticket promedio, datos diarios para gráfico, desglose por medio de pago.
+ * Cantidad de ventas, datos diarios para gráfico y desgloses — todo por
+ * currencyCode. No hay un "total"/"avgTicket" único: sumar montos de ARS,
+ * USD y USDT en un solo número es exactamente el bug que este módulo
+ * reemplaza (ver diagnóstico). `count` es la única cifra que se muestra sin
+ * desglosar por moneda porque es una cantidad de ventas, no un monto.
+ *
+ * NOTA: hasta que se actualice pos.controller.js (próximo módulo), la
+ * creación de Sale falla en runtime porque el campo se renombró a
+ * currencyCode — este reporte va a devolver todo en 0 mientras tanto. Es
+ * esperado, no un bug de este endpoint.
  */
 const getSalesReport = async (req, res) => {
   try {
@@ -28,58 +38,66 @@ const getSalesReport = async (req, res) => {
     const dateFilter = buildDateFilter(from, to);
     const where = { tenantId, ...(dateFilter && { createdAt: dateFilter }) };
 
-    const [agg, byPayment, byCurrencyRaw, allSales] = await Promise.all([
-      prisma.sale.aggregate({ where, _sum: { total: true }, _count: { id: true } }),
+    const [byPaymentRaw, byCurrencyRaw, allSales] = await Promise.all([
       prisma.sale.groupBy({
-        by: ['paymentMethod'],
+        by: ['paymentMethod', 'currencyCode'],
         where,
         _sum: { total: true },
         _count: { id: true },
       }),
       prisma.sale.groupBy({
-        by: ['currency'],
+        by: ['currencyCode'],
         where,
         _sum: { total: true },
         _count: { id: true },
       }),
       prisma.sale.findMany({
         where,
-        select: { createdAt: true, total: true },
+        select: { createdAt: true, total: true, currencyCode: true },
         orderBy: { createdAt: 'asc' },
       }),
     ]);
 
-    const totalAmount = parseFloat(agg._sum.total ?? 0);
-    const salesCount  = agg._count.id;
-
+    // dailyData: un objeto por día con un total por moneda (totals.ARS,
+    // totals.USD, totals.USDT) — nunca se suman entre sí.
     const dayMap = {};
     for (const s of allSales) {
       const day = s.createdAt.toISOString().split('T')[0];
-      if (!dayMap[day]) dayMap[day] = { date: day, total: 0, count: 0 };
-      dayMap[day].total  += parseFloat(s.total);
-      dayMap[day].count  += 1;
+      if (!dayMap[day]) dayMap[day] = { date: day, totals: {}, counts: {} };
+      const cur = s.currencyCode;
+      dayMap[day].totals[cur] = (dayMap[day].totals[cur] ?? 0) + parseFloat(s.total);
+      dayMap[day].counts[cur] = (dayMap[day].counts[cur] ?? 0) + 1;
     }
     for (const d of Object.values(dayMap)) {
-      d.total = parseFloat(d.total.toFixed(2));
+      for (const cur of Object.keys(d.totals)) d.totals[cur] = parseFloat(d.totals[cur].toFixed(2));
     }
 
+    const byPaymentMethod = {};
+    for (const row of byPaymentRaw) {
+      if (!byPaymentMethod[row.paymentMethod]) byPaymentMethod[row.paymentMethod] = {};
+      byPaymentMethod[row.paymentMethod][row.currencyCode] = {
+        total: parseFloat(row._sum.total ?? 0),
+        count: row._count.id,
+      };
+    }
+
+    const byCurrency = Object.fromEntries(
+      byCurrencyRaw.map((b) => {
+        const total = parseFloat(b._sum.total ?? 0);
+        const count = b._count.id;
+        return [b.currencyCode, {
+          total,
+          count,
+          avgTicket: count > 0 ? parseFloat((total / count).toFixed(2)) : 0,
+        }];
+      })
+    );
+
     res.json({
-      total:   totalAmount,
-      count:   salesCount,
-      avgTicket: salesCount > 0 ? parseFloat((totalAmount / salesCount).toFixed(2)) : 0,
+      count: allSales.length,
       dailyData: Object.values(dayMap),
-      byPaymentMethod: Object.fromEntries(
-        byPayment.map((b) => [b.paymentMethod, {
-          total: parseFloat(b._sum.total ?? 0),
-          count: b._count.id,
-        }])
-      ),
-      byCurrency: Object.fromEntries(
-        byCurrencyRaw.map((b) => [(b.currency ?? 'ARS'), {
-          total: parseFloat(b._sum.total ?? 0),
-          count: b._count.id,
-        }])
-      ),
+      byPaymentMethod,
+      byCurrency,
     });
   } catch (error) {
     console.error('[reports:sales]', error);
@@ -168,7 +186,7 @@ const getInventoryReport = async (req, res) => {
 
     const [byCurrencyRaw, byCondition, products] = await Promise.all([
       prisma.inventoryItem.groupBy({
-        by: ['currency'],
+        by: ['currencyCode'],
         where: { tenantId, status: 'AVAILABLE' },
         _sum: { costPrice: true, salePrice: true },
         _count: { id: true },
@@ -190,7 +208,7 @@ const getInventoryReport = async (req, res) => {
     const byCurrency = {};
     let totalItems = 0;
     for (const row of byCurrencyRaw) {
-      byCurrency[row.currency] = {
+      byCurrency[row.currencyCode] = {
         costValue: parseFloat(row._sum.costPrice ?? 0),
         saleValue: parseFloat(row._sum.salePrice ?? 0),
         count:     row._count.id,
@@ -286,47 +304,67 @@ const getRepairsReport = async (req, res) => {
 
 /**
  * GET /api/reports/cash?from=&to=
- * Ingresos, egresos, saldo neto, desglose por medio de pago.
+ * Ingresos, egresos y saldo neto por moneda, calculados desde LedgerEntry —
+ * antes este endpoint no separaba por moneda en absoluto (income/expense/
+ * netBalance eran una mezcla de ARS+USD+USDT). Excluye
+ * TENANT_BALANCE_EXCLUDED_TYPES (SUBSCRIPTION_PAYMENT: billing de Vexio, no
+ * caja del tenant; PURCHASE_ORDER: deuda con el proveedor, no plata que
+ * salió de la caja — ver regla en el schema).
+ *
+ * netBalance = income - expense + adjustments — a propósito NO incluye
+ * openingBalance: un SESSION_OPEN que cae dentro del rango de fechas es
+ * saldo transferido de una sesión a otra, no plata que "entró" ese día.
+ * Se expone aparte en openingBalancesInPeriod para no perder el dato, pero
+ * nunca se mezcla con income/netBalance. (Distinto del `balance` de sesión
+ * en cash.controller.js, que sí incluye openingBalance a propósito — ahí
+ * representa el efectivo real contra el que se concilia al cerrar caja.)
  */
 const getCashReport = async (req, res) => {
   try {
     const { tenantId } = req.user;
     const { from, to } = req.query;
     const dateFilter = buildDateFilter(from, to);
-    const where = { tenantId, ...(dateFilter && { createdAt: dateFilter }) };
 
-    const [byType, byPayment] = await Promise.all([
-      prisma.cashMovement.groupBy({
-        by: ['type'],
-        where,
-        _sum: { amount: true },
-        _count: { id: true },
+    const [entries, byPaymentRaw] = await Promise.all([
+      prisma.ledgerEntry.findMany({
+        where: {
+          tenantId,
+          type: { notIn: TENANT_BALANCE_EXCLUDED_TYPES },
+          ...(dateFilter && { createdAt: dateFilter }),
+        },
+        select: { currencyCode: true, amount: true, type: true },
       }),
       prisma.cashMovement.groupBy({
-        by: ['paymentMethod', 'type'],
-        where,
+        by: ['paymentMethod', 'type', 'currencyCode'],
+        where: { tenantId, ...(dateFilter && { createdAt: dateFilter }) },
         _sum: { amount: true },
       }),
     ]);
 
-    const income  = parseFloat(byType.find((b) => b.type === 'INCOME')?._sum.amount  ?? 0);
-    const expense = parseFloat(byType.find((b) => b.type === 'EXPENSE')?._sum.amount ?? 0);
+    const breakdown = reduceLedgerByCurrency(
+      entries.map((e) => ({ currencyCode: e.currencyCode, amount: parseFloat(e.amount), type: e.type }))
+    );
+
+    const byCurrency = Object.fromEntries(
+      Object.entries(breakdown).map(([code, b]) => [code, {
+        income: b.income,
+        expense: b.expense,
+        netBalance: parseFloat((b.income - b.expense + b.adjustments).toFixed(2)),
+        openingBalancesInPeriod: b.openingBalance, // informativo — no forma parte de income ni de netBalance
+      }])
+    );
 
     const byPaymentMethod = {};
-    for (const row of byPayment) {
-      if (!byPaymentMethod[row.paymentMethod]) {
-        byPaymentMethod[row.paymentMethod] = { income: 0, expense: 0 };
+    for (const row of byPaymentRaw) {
+      if (!byPaymentMethod[row.paymentMethod]) byPaymentMethod[row.paymentMethod] = {};
+      if (!byPaymentMethod[row.paymentMethod][row.currencyCode]) {
+        byPaymentMethod[row.paymentMethod][row.currencyCode] = { income: 0, expense: 0 };
       }
-      byPaymentMethod[row.paymentMethod][row.type === 'INCOME' ? 'income' : 'expense'] =
+      byPaymentMethod[row.paymentMethod][row.currencyCode][row.type === 'INCOME' ? 'income' : 'expense'] =
         parseFloat(row._sum.amount ?? 0);
     }
 
-    res.json({
-      income,
-      expense,
-      netBalance: parseFloat((income - expense).toFixed(2)),
-      byPaymentMethod,
-    });
+    res.json({ byCurrency, byPaymentMethod });
   } catch (error) {
     console.error('[reports:cash]', error);
     res.status(500).json({ message: 'Error interno del servidor.' });

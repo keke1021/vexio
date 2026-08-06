@@ -55,6 +55,11 @@ const getPeriodDates = (period) => {
   return null;
 };
 
+const CURRENCIES = ['ARS', 'USD', 'USDT'];
+
+// dailyData ahora trae { date, totals: {ARS,USD,USDT}, counts: {...} } — se
+// completan los días sin ventas con 0 en cada moneda, nunca con un total
+// único que mezcle monedas.
 const fillDailyData = (data, from, to) => {
   if (!data?.length || !from) return data ?? [];
   const map = Object.fromEntries(data.map((d) => [d.date, d]));
@@ -63,7 +68,7 @@ const fillDailyData = (data, from, to) => {
   const end = new Date(to ?? from);
   while (cur <= end) {
     const k = cur.toISOString().split('T')[0];
-    result.push(map[k] ?? { date: k, total: 0, count: 0 });
+    result.push(map[k] ?? { date: k, totals: {}, counts: {} });
     cur.setDate(cur.getDate() + 1);
   }
   return result;
@@ -71,15 +76,25 @@ const fillDailyData = (data, from, to) => {
 
 // ─── Chart tooltip ────────────────────────────────────────────────────────────
 
+const CHART_COLORS = { ARS: '#3B82F6', USD: '#16A34A', USDT: '#7C3AED' };
+
+// El tooltip recorre `payload` (una entrada por <Bar> con datos ese día,
+// es decir, por moneda presente) en vez de asumir un único total mezclado.
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[12px] shadow-lg">
       <p className="text-[#64748B] mb-1">{fmtDate(label)}</p>
-      <p className="text-[#0F172A] font-medium">{fmt(payload[0]?.value)}</p>
-      {payload[0]?.payload?.count > 0 && (
-        <p className="text-[#94A3B8] mt-0.5">{payload[0].payload.count} venta{payload[0].payload.count !== 1 ? 's' : ''}</p>
-      )}
+      {payload.map((p) => {
+        const cur = p.dataKey?.split('.')[1] ?? p.name;
+        const count = p.payload?.counts?.[cur] ?? 0;
+        return (
+          <p key={cur} className="text-[#0F172A] font-medium">
+            <span style={{ color: CHART_COLORS[cur] }}>{cur}</span> {fmt(p.value)}
+            {count > 0 && <span className="text-[#94A3B8] font-normal"> · {count} venta{count !== 1 ? 's' : ''}</span>}
+          </p>
+        );
+      })}
     </div>
   );
 };
@@ -110,17 +125,22 @@ const exportToExcel = ({ salesData, productsData, inventoryData, repairsData, ca
   const salesRows = [
     ['Período', periodLabel],
     [],
-    ['Total ventas', salesData?.total ?? 0],
     ['Cantidad de ventas', salesData?.count ?? 0],
-    ['Ticket promedio', salesData?.avgTicket ?? 0],
     [],
-    ['Medio de pago', 'Total', 'Cantidad'],
-    ...Object.entries(salesData?.byPaymentMethod ?? {}).map(([pm, v]) => [
-      PAYMENT_LABELS[pm] ?? pm, v.total, v.count,
+    ['Moneda', 'Total', 'Cantidad', 'Ticket promedio'],
+    ...CURRENCIES.filter((c) => salesData?.byCurrency?.[c]).map((c) => [
+      c, salesData.byCurrency[c].total, salesData.byCurrency[c].count, salesData.byCurrency[c].avgTicket,
     ]),
     [],
-    ['Fecha', 'Total del día', 'Cantidad'],
-    ...(salesData?.dailyData ?? []).map((d) => [d.date, d.total, d.count]),
+    ['Medio de pago', 'Moneda', 'Total', 'Cantidad'],
+    ...Object.entries(salesData?.byPaymentMethod ?? {}).flatMap(([pm, byCur]) =>
+      Object.entries(byCur).map(([cur, v]) => [PAYMENT_LABELS[pm] ?? pm, cur, v.total, v.count])
+    ),
+    [],
+    ['Fecha', 'Moneda', 'Total del día', 'Cantidad'],
+    ...(salesData?.dailyData ?? []).flatMap((d) =>
+      CURRENCIES.filter((c) => d.totals?.[c]).map((c) => [d.date, c, d.totals[c], d.counts?.[c] ?? 0])
+    ),
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(salesRows), 'Ventas');
 
@@ -164,14 +184,15 @@ const exportToExcel = ({ salesData, productsData, inventoryData, repairsData, ca
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(repairRows), 'Reparaciones');
 
   const cashRows = [
-    ['Ingresos', cashData?.income ?? 0],
-    ['Egresos', cashData?.expense ?? 0],
-    ['Saldo neto', cashData?.netBalance ?? 0],
-    [],
-    ['Medio de pago', 'Ingresos', 'Egresos'],
-    ...Object.entries(cashData?.byPaymentMethod ?? {}).map(([pm, v]) => [
-      PAYMENT_LABELS[pm] ?? pm, v.income, v.expense,
+    ['Moneda', 'Ingresos', 'Egresos', 'Saldo neto'],
+    ...CURRENCIES.filter((c) => cashData?.byCurrency?.[c]).map((c) => [
+      c, cashData.byCurrency[c].income, cashData.byCurrency[c].expense, cashData.byCurrency[c].netBalance,
     ]),
+    [],
+    ['Medio de pago', 'Moneda', 'Ingresos', 'Egresos'],
+    ...Object.entries(cashData?.byPaymentMethod ?? {}).flatMap(([pm, byCur]) =>
+      Object.entries(byCur).map(([cur, v]) => [PAYMENT_LABELS[pm] ?? pm, cur, v.income, v.expense])
+    ),
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cashRows), 'Caja');
 
@@ -304,10 +325,10 @@ const ReportsPage = () => {
         {salesQ.isLoading && <LoadingRow />}
         {!salesQ.isLoading && salesQ.data && (
           <>
+            {/* No hay "total del período" ni "ticket promedio" mezclando monedas —
+                cada cifra en plata vive desglosada por moneda en "Por moneda" abajo. */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
-              <StatCard label="Total del período"  value={fmt(salesQ.data.total)} accent="text-[#3B82F6]" />
-              <StatCard label="Cantidad de ventas" value={salesQ.data.count} />
-              <StatCard label="Ticket promedio"    value={fmt(salesQ.data.avgTicket)} />
+              <StatCard label="Cantidad de ventas" value={salesQ.data.count} accent="text-[#3B82F6]" />
             </div>
 
             {dailyData.length > 1 && (
@@ -333,7 +354,9 @@ const ReportsPage = () => {
                       tickLine={false}
                     />
                     <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
-                    <Bar dataKey="total" fill="#3B82F6" radius={[3, 3, 0, 0]} maxBarSize={40} />
+                    {CURRENCIES.map((cur) => (
+                      <Bar key={cur} dataKey={`totals.${cur}`} name={cur} fill={CHART_COLORS[cur]} radius={[3, 3, 0, 0]} maxBarSize={40} />
+                    ))}
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -345,29 +368,31 @@ const ReportsPage = () => {
                   Por medio de pago
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {Object.entries(salesQ.data.byPaymentMethod).map(([pm, v]) => (
-                    <div key={pm}>
-                      <p className="text-[11px] text-[#94A3B8] mb-1">{PAYMENT_LABELS[pm] ?? pm}</p>
-                      <p className="text-[16px] font-bold text-[#0F172A]">{fmt(v.total)}</p>
-                      <p className="text-[11px] text-[#CBD5E1]">{v.count} venta{v.count !== 1 ? 's' : ''}</p>
-                    </div>
-                  ))}
+                  {Object.entries(salesQ.data.byPaymentMethod).flatMap(([pm, byCur]) =>
+                    Object.entries(byCur).map(([cur, v]) => (
+                      <div key={`${pm}-${cur}`}>
+                        <p className="text-[11px] text-[#94A3B8] mb-1">{PAYMENT_LABELS[pm] ?? pm} · {cur}</p>
+                        <p className="text-[16px] font-bold text-[#0F172A]">{cur === 'ARS' ? fmt(v.total) : fmtUSD(v.total)}</p>
+                        <p className="text-[11px] text-[#CBD5E1]">{v.count} venta{v.count !== 1 ? 's' : ''}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}
 
-            {salesQ.data.byCurrency && Object.keys(salesQ.data.byCurrency).length > 1 && (
+            {salesQ.data.byCurrency && Object.keys(salesQ.data.byCurrency).length > 0 && (
               <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4 mt-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
                 <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-3">Por moneda</p>
                 <div className="flex flex-wrap gap-5">
-                  {['ARS', 'USD', 'USDT'].map((cur) => {
+                  {CURRENCIES.map((cur) => {
                     const v = salesQ.data.byCurrency[cur];
                     if (!v) return null;
                     return (
                       <div key={cur}>
                         <p className="text-[11px] font-bold text-[#94A3B8] mb-1">{cur}</p>
-                        <p className="text-[16px] font-bold text-[#0F172A]">{fmt(v.total)}</p>
-                        <p className="text-[11px] text-[#CBD5E1]">{v.count} venta{v.count !== 1 ? 's' : ''}</p>
+                        <p className="text-[16px] font-bold text-[#0F172A]">{cur === 'ARS' ? fmt(v.total) : fmtUSD(v.total)}</p>
+                        <p className="text-[11px] text-[#CBD5E1]">{v.count} venta{v.count !== 1 ? 's' : ''} · ticket prom. {cur === 'ARS' ? fmt(v.avgTicket) : fmtUSD(v.avgTicket)}</p>
                       </div>
                     );
                   })}
@@ -548,23 +573,41 @@ const ReportsPage = () => {
         {cashQ.isLoading && <LoadingRow />}
         {!cashQ.isLoading && cashQ.data && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
-              <StatCard label="Ingresos"   value={fmt(cashQ.data.income)}     accent="text-emerald-600" />
-              <StatCard label="Egresos"    value={fmt(cashQ.data.expense)}    accent="text-red-500" />
-              <StatCard label="Saldo neto" value={fmt(cashQ.data.netBalance)} accent={cashQ.data.netBalance >= 0 ? 'text-[#0F172A]' : 'text-red-500'} />
+            {/* Ingresos/Egresos/Saldo neto por moneda — antes este endpoint no
+                separaba por moneda en absoluto. */}
+            <div className="space-y-3 mb-5">
+              {CURRENCIES.filter((c) => cashQ.data.byCurrency?.[c]).map((cur) => {
+                const v = cashQ.data.byCurrency[cur];
+                const f = cur === 'ARS' ? fmt : fmtUSD;
+                return (
+                  <div key={cur}>
+                    <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-widest mb-2">{cur}</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <StatCard label="Ingresos"   value={f(v.income)}     accent="text-emerald-600" />
+                      <StatCard label="Egresos"    value={f(v.expense)}    accent="text-red-500" />
+                      <StatCard label="Saldo neto" value={f(v.netBalance)} accent={v.netBalance >= 0 ? 'text-[#0F172A]' : 'text-red-500'} />
+                    </div>
+                  </div>
+                );
+              })}
+              {Object.keys(cashQ.data.byCurrency ?? {}).length === 0 && (
+                <p className="text-[13px] text-[#CBD5E1]">Sin movimientos de caja en el período seleccionado.</p>
+              )}
             </div>
 
             {Object.keys(cashQ.data.byPaymentMethod).length > 0 && (
               <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
                 <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-3">Por medio de pago</p>
                 <div className="flex flex-wrap gap-5">
-                  {Object.entries(cashQ.data.byPaymentMethod).map(([pm, v]) => (
-                    <div key={pm}>
-                      <p className="text-[11px] text-[#94A3B8] mb-0.5">{PAYMENT_LABELS[pm] ?? pm}</p>
-                      <p className="text-[13px] font-medium text-emerald-600">+{fmt(v.income)}</p>
-                      {v.expense > 0 && <p className="text-[12px] text-red-500">−{fmt(v.expense)}</p>}
-                    </div>
-                  ))}
+                  {Object.entries(cashQ.data.byPaymentMethod).flatMap(([pm, byCur]) =>
+                    Object.entries(byCur).map(([cur, v]) => (
+                      <div key={`${pm}-${cur}`}>
+                        <p className="text-[11px] text-[#94A3B8] mb-0.5">{PAYMENT_LABELS[pm] ?? pm} · {cur}</p>
+                        <p className="text-[13px] font-medium text-emerald-600">+{cur === 'ARS' ? fmt(v.income) : fmtUSD(v.income)}</p>
+                        {v.expense > 0 && <p className="text-[12px] text-red-500">−{cur === 'ARS' ? fmt(v.expense) : fmtUSD(v.expense)}</p>}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}

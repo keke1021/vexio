@@ -25,8 +25,20 @@ const processQueue = (error, token = null) => {
 
 const isAuthUrl = (url = '') => url.includes('/auth/');
 
+// Si VITE_API_URL está seteada (ej. en Vercel), manda esa. Si no, el
+// fallback depende de si es un build de dev o de producción: en dev
+// (`vite`) pega al backend local, en build de producción (`vite build`)
+// mantiene el comportamiento actual hardcodeado a Railway — así este
+// cambio no puede romper producción aunque VITE_API_URL no esté seteada
+// ahí. import.meta.env.DEV lo pone Vite automáticamente, no depende de
+// ninguna variable propia.
+const PROD_API_URL = 'https://vexio-production-75d5.up.railway.app/api';
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.DEV ? 'http://localhost:3001/api' : PROD_API_URL);
+
 const api = axios.create({
-  baseURL: 'https://vexio-production-75d5.up.railway.app/api',
+  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -64,7 +76,7 @@ api.interceptors.response.use(
     _isRefreshing = true;
 
     try {
-      const { data } = await axios.post('https://vexio-production-75d5.up.railway.app/api/auth/refresh', {
+      const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {
         refreshToken,
       });
 

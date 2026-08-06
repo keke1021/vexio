@@ -1,13 +1,59 @@
 const { PrismaClient } = require('@prisma/client');
+const { createTenantWithOwner } = require('../utils/tenantOnboarding');
 
 const prisma = new PrismaClient();
-
-// USD/month por plan — referencia interna para calcular MRR estimado
-const PLAN_MRR = { STARTER: 19, PRO: 39, FULL: 69 };
 
 const serializePayment = (p) => ({ ...p, amount: parseFloat(p.amount) });
 
 // ─── Tenants ──────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/admin/tenants
+ * Alta manual de un tenant nuevo desde el panel de Admin — flujo separado
+ * del registro público (POST /api/auth/register), solo accesible como
+ * SUPERADMIN. Mismos campos que register más maxUsers (que register no
+ * pide, es un campo solo de Admin). Usa el mismo helper que register para
+ * crear Tenant + primer User (role OWNER, mismo hasheo de password) — no
+ * se duplica esa lógica entre los dos flujos.
+ *
+ * A diferencia de register, acá NO se generan tokens ni se loguea a nadie
+ * como el tenant nuevo — el SUPERADMIN sigue logueado como sí mismo. La
+ * creación de la primera Tienda (sucursal) del tenant queda para un paso
+ * aparte, desde el detalle del tenant.
+ */
+const createTenant = async (req, res) => {
+  try {
+    const { tenantName, tenantSlug, email, password, name, maxUsers } = req.body;
+
+    if (!tenantName || !tenantSlug || !email || !password || !name) {
+      return res.status(400).json({ message: 'tenantName, tenantSlug, email, password y name son requeridos.' });
+    }
+
+    const existingTenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+    if (existingTenant) {
+      return res.status(409).json({ message: 'El slug de tienda ya está en uso.' });
+    }
+
+    const extraTenantData = {};
+    if (maxUsers !== undefined) {
+      const n = parseInt(maxUsers, 10);
+      if (isNaN(n) || n < 1) return res.status(400).json({ message: 'maxUsers debe ser un entero >= 1.' });
+      extraTenantData.maxUsers = n;
+    }
+
+    const { tenant, user } = await createTenantWithOwner(prisma, {
+      tenantName, tenantSlug, email, password, name, extraTenantData,
+    });
+
+    res.status(201).json({
+      tenant,
+      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+    });
+  } catch (error) {
+    console.error('[admin:createTenant]', error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
 
 /**
  * GET /api/admin/tenants
@@ -57,9 +103,12 @@ const getTenantById = async (req, res) => {
         users: {
           select: {
             id: true, name: true, email: true, role: true,
-            isActive: true, createdAt: true,
+            isActive: true, createdAt: true, tiendaId: true,
           },
           orderBy: { role: 'asc' },
+        },
+        tiendas: {
+          orderBy: { name: 'asc' },
         },
         _count: {
           select: {
@@ -89,7 +138,7 @@ const getTenantById = async (req, res) => {
 const updateTenant = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, plan, activeModules, extraUsers, subscriptionEndsAt } = req.body;
+    const { status, plan, activeModules, extraUsers, maxUsers, subscriptionEndsAt, storeCount } = req.body;
 
     const existing = await prisma.tenant.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ message: 'Tienda no encontrada.' });
@@ -119,8 +168,20 @@ const updateTenant = async (req, res) => {
       data.extraUsers = n;
     }
 
+    if (maxUsers !== undefined) {
+      const n = parseInt(maxUsers, 10);
+      if (isNaN(n) || n < 1) return res.status(400).json({ message: 'maxUsers debe ser un entero >= 1.' });
+      data.maxUsers = n;
+    }
+
     if (subscriptionEndsAt !== undefined) {
       data.subscriptionEndsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
+    }
+
+    if (storeCount !== undefined) {
+      const n = parseInt(storeCount, 10);
+      if (isNaN(n) || n < 1) return res.status(400).json({ message: 'storeCount debe ser un entero >= 1.' });
+      data.storeCount = n; // informativo — no dispara ningún cálculo
     }
 
     if (!Object.keys(data).length) {
@@ -143,9 +204,8 @@ const updateTenant = async (req, res) => {
  */
 const getStats = async (req, res) => {
   try {
-    const [byStatus, byPlan, totalItems, totalSales, totalRepairs, recentTenants] = await Promise.all([
+    const [byStatus, totalItems, totalSales, totalRepairs, recentTenants] = await Promise.all([
       prisma.tenant.groupBy({ by: ['status'], _count: { id: true } }),
-      prisma.tenant.groupBy({ by: ['plan', 'status'], _count: { id: true } }),
       prisma.inventoryItem.count({ where: { status: 'AVAILABLE' } }),
       prisma.sale.count(),
       prisma.repairOrder.count(),
@@ -159,24 +219,10 @@ const getStats = async (req, res) => {
     const totalTenants  = byStatus.reduce((s, b) => s + b._count.id, 0);
     const activeTenants = byStatus.find((b) => b.status === 'ACTIVE')?._count.id ?? 0;
 
-    const mrr = byPlan
-      .filter((b) => b.status === 'ACTIVE')
-      .reduce((sum, b) => sum + (PLAN_MRR[b.plan] ?? 0) * b._count.id, 0);
-
-    const byPlanTotals = Object.fromEntries(
-      ['STARTER', 'PRO', 'FULL'].map((plan) => [
-        plan,
-        byPlan.filter((b) => b.plan === plan).reduce((s, b) => s + b._count.id, 0),
-      ])
-    );
-
     res.json({
       totalTenants,
       activeTenants,
-      mrr,
-      mrrCurrency: 'USD',
       byStatus: Object.fromEntries(byStatus.map((b) => [b.status, b._count.id])),
-      byPlan: byPlanTotals,
       totalItems,
       totalSales,
       totalRepairs,
@@ -190,33 +236,68 @@ const getStats = async (req, res) => {
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
 
+const VALID_PAYMENT_TYPES = ['IMPLEMENTATION', 'MONTHLY'];
+
 /**
  * POST /api/admin/tenants/:id/payment
- * Registrar pago manual de una tienda.
+ * Registrar pago manual de una tienda. El monto se carga a mano (no se
+ * calcula desde el plan) — Payment.amount ya cubre eso, sin campo nuevo.
+ *
+ * Crea el Payment (documento) y su LedgerEntry (type=SUBSCRIPTION_PAYMENT,
+ * paymentId) en la misma transacción — mismo patrón que Sale/CashMovement y
+ * PurchaseOrder: el documento se ve en el historial de la tienda, el
+ * LedgerEntry es el hecho financiero que alimenta el reporte de billing.
  */
 const registerPayment = async (req, res) => {
   try {
     const { id: tenantId } = req.params;
-    const { amount, currency, paidAt, notes } = req.body;
+    const { userId } = req.user;
+    const { amount, currencyCode, paymentType, paidAt, notes } = req.body;
 
     if (!amount || parseFloat(amount) <= 0) {
       return res.status(400).json({ message: 'El monto debe ser mayor a 0.' });
     }
-    if (!['USD', 'PESOS', 'USDT'].includes(currency)) {
+    if (!VALID_PAYMENT_TYPES.includes(paymentType)) {
+      return res.status(400).json({ message: 'paymentType inválido. Debe ser IMPLEMENTATION o MONTHLY.' });
+    }
+
+    const currency = await prisma.currency.findUnique({ where: { code: currencyCode } });
+    if (!currency || !currency.isActive) {
       return res.status(400).json({ message: 'Moneda inválida.' });
     }
 
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) return res.status(404).json({ message: 'Tienda no encontrada.' });
 
-    const payment = await prisma.payment.create({
-      data: {
-        amount:   parseFloat(amount),
-        currency,
-        paidAt:   paidAt ? new Date(paidAt) : new Date(),
-        notes:    notes || null,
-        tenantId,
-      },
+    const parsedAmount = parseFloat(amount);
+    const paidAtDate = paidAt ? new Date(paidAt) : new Date();
+    const description = `Pago de suscripción — ${tenant.name} (${paymentType === 'IMPLEMENTATION' ? 'implementación' : 'mensualidad'})`;
+
+    const payment = await prisma.$transaction(async (tx) => {
+      const created = await tx.payment.create({
+        data: {
+          amount:      parsedAmount,
+          currencyCode: currency.code,
+          paymentType,
+          paidAt:      paidAtDate,
+          notes:       notes || null,
+          tenantId,
+        },
+      });
+
+      await tx.ledgerEntry.create({
+        data: {
+          tenantId,
+          currencyCode: currency.code,
+          amount: parsedAmount,
+          type: 'SUBSCRIPTION_PAYMENT',
+          paymentId: created.id,
+          description,
+          createdById: userId,
+        },
+      });
+
+      return created;
     });
 
     res.status(201).json(serializePayment(payment));
@@ -242,11 +323,21 @@ const getPayments = async (req, res) => {
       orderBy: { paidAt: 'desc' },
     });
 
-    const totalByCurrency = payments.reduce((acc, p) => {
-      const k = p.currency;
-      acc[k] = (acc[k] ?? 0) + parseFloat(p.amount);
-      return acc;
-    }, {});
+    // Desglosado por moneda Y por paymentType — sumar implementación +
+    // mensualidad en un solo número por moneda sería la misma familia de
+    // bug que venimos corrigiendo en todo el proyecto (mezclar cosas
+    // distintas en una sola suma), esta vez en la propia facturación.
+    const totalByCurrency = {};
+    for (const p of payments) {
+      const cur = p.currencyCode;
+      if (!totalByCurrency[cur]) totalByCurrency[cur] = { IMPLEMENTATION: 0, MONTHLY: 0 };
+      totalByCurrency[cur][p.paymentType] += parseFloat(p.amount);
+    }
+    for (const cur of Object.keys(totalByCurrency)) {
+      for (const type of VALID_PAYMENT_TYPES) {
+        totalByCurrency[cur][type] = parseFloat(totalByCurrency[cur][type].toFixed(2));
+      }
+    }
 
     res.json({
       payments: payments.map(serializePayment),
@@ -258,19 +349,77 @@ const getPayments = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/admin/billing-report?from=&to=
+ * Ingreso real de Vexio (todos los tenants), desglosado por moneda y por
+ * paymentType. Filtra por Payment.paidAt (cuándo se cobró realmente, no
+ * cuándo se cargó el registro).
+ *
+ * ÚNICA vista de todo el sistema donde type=SUBSCRIPTION_PAYMENT debe
+ * incluirse — ver regla en el schema (LedgerEntry) y TENANT_BALANCE_EXCLUDED_TYPES
+ * en src/utils/ledger.js. En ningún reporte visible para el tenant (Caja,
+ * Reportes, POS, Proveedores, Inventario) debe aparecer esta plata.
+ */
+const getBillingReport = async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const paidAtFilter = {};
+    if (from) paidAtFilter.gte = new Date(from);
+    if (to) {
+      const d = new Date(to);
+      d.setDate(d.getDate() + 1);
+      paidAtFilter.lte = d;
+    }
+
+    const entries = await prisma.ledgerEntry.findMany({
+      where: {
+        type: 'SUBSCRIPTION_PAYMENT',
+        ...(Object.keys(paidAtFilter).length && { payment: { paidAt: paidAtFilter } }),
+      },
+      select: {
+        currencyCode: true,
+        amount: true,
+        payment: { select: { paymentType: true, tenantId: true, tenant: { select: { name: true } } } },
+      },
+    });
+
+    const byCurrency = {};
+    for (const e of entries) {
+      const cur = e.currencyCode;
+      const type = e.payment?.paymentType ?? 'UNKNOWN';
+      if (!byCurrency[cur]) byCurrency[cur] = { IMPLEMENTATION: 0, MONTHLY: 0 };
+      byCurrency[cur][type] = (byCurrency[cur][type] ?? 0) + parseFloat(e.amount);
+    }
+    for (const cur of Object.keys(byCurrency)) {
+      for (const type of Object.keys(byCurrency[cur])) {
+        byCurrency[cur][type] = parseFloat(byCurrency[cur][type].toFixed(2));
+      }
+    }
+
+    res.json({ count: entries.length, byCurrency });
+  } catch (error) {
+    console.error('[admin:getBillingReport]', error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
 // ─── User management ─────────────────────────────────────────────────────────
 
 const bcrypt = require('bcryptjs');
-const PLAN_USER_LIMITS = { STARTER: 3, PRO: 5, FULL: 7 };
+// DEPRECATED — reemplazado por Tenant.maxUsers (límite real, seteado a mano
+// por tenant). Se deja la constante comentada como referencia histórica del
+// valor que tenía cada plan; ya no se usa en ningún lado.
+// const PLAN_USER_LIMITS = { STARTER: 3, PRO: 5, FULL: 7 };
 
 /**
  * POST /api/admin/tenants/:id/users
- * Crea un usuario para una tienda. Respeta el límite del plan + extraUsers.
+ * Crea un usuario para una tienda. Respeta Tenant.maxUsers + extraUsers.
+ * Acepta tiendaId opcional (debe pertenecer al mismo tenant).
  */
 const createTenantUser = async (req, res) => {
   try {
     const { id: tenantId } = req.params;
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, tiendaId } = req.body;
 
     if (!name || !email || !password || !role) {
       return res.status(400).json({ message: 'name, email, password y role son requeridos.' });
@@ -282,12 +431,17 @@ const createTenantUser = async (req, res) => {
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) return res.status(404).json({ message: 'Tienda no encontrada.' });
 
+    if (tiendaId) {
+      const tienda = await prisma.tienda.findFirst({ where: { id: tiendaId, tenantId } });
+      if (!tienda) return res.status(400).json({ message: 'La sucursal indicada no pertenece a esta tienda.' });
+    }
+
     const activeCount = await prisma.user.count({ where: { tenantId, isActive: true } });
-    const limit = (PLAN_USER_LIMITS[tenant.plan] ?? 3) + (tenant.extraUsers ?? 0);
+    const limit = (tenant.maxUsers ?? 7) + (tenant.extraUsers ?? 0);
 
     if (activeCount >= limit) {
       return res.status(403).json({
-        message: `El plan ${tenant.plan} permite máximo ${limit} usuario${limit !== 1 ? 's' : ''}. Aumentá el plan o agregá usuarios extra.`,
+        message: `Esta tienda permite máximo ${limit} usuario${limit !== 1 ? 's' : ''}. Aumentá maxUsers o agregá usuarios extra.`,
       });
     }
 
@@ -298,13 +452,61 @@ const createTenantUser = async (req, res) => {
 
     const hashed = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
-      data: { name, email, password: hashed, role, tenantId },
-      select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
+      data: { name, email, password: hashed, role, tenantId, tiendaId: tiendaId || null },
+      select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true, tiendaId: true },
     });
 
     res.status(201).json(user);
   } catch (error) {
     console.error('[admin:createTenantUser]', error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * PUT /api/admin/tenants/:id/users/:userId
+ * Edita rol y/o sucursal (tiendaId) de un usuario existente.
+ */
+const updateTenantUser = async (req, res) => {
+  try {
+    const { id: tenantId, userId } = req.params;
+    const { role, tiendaId } = req.body;
+
+    const user = await prisma.user.findFirst({ where: { id: userId, tenantId } });
+    if (!user) return res.status(404).json({ message: 'Usuario no encontrado.' });
+
+    const data = {};
+
+    if (role !== undefined) {
+      if (!['OWNER', 'ADMIN', 'SELLER', 'TECH'].includes(role)) {
+        return res.status(400).json({ message: 'Rol inválido.' });
+      }
+      data.role = role;
+    }
+
+    if (tiendaId !== undefined) {
+      if (tiendaId) {
+        const tienda = await prisma.tienda.findFirst({ where: { id: tiendaId, tenantId } });
+        if (!tienda) return res.status(400).json({ message: 'La sucursal indicada no pertenece a esta tienda.' });
+        data.tiendaId = tiendaId;
+      } else {
+        data.tiendaId = null;
+      }
+    }
+
+    if (!Object.keys(data).length) {
+      return res.status(400).json({ message: 'Nada que actualizar.' });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data,
+      select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true, tiendaId: true },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('[admin:updateTenantUser]', error);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
@@ -331,6 +533,118 @@ const deleteTenantUser = async (req, res) => {
     res.json({ message: 'Usuario desactivado exitosamente.' });
   } catch (error) {
     console.error('[admin:deleteTenantUser]', error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+// ─── Sucursales (Tienda) ────────────────────────────────────────────────────
+// Esqueleto administrativo — alta/baja/edición de sucursales de un tenant.
+// No toca stock, caja ni ventas por sucursal (etapa futura separada).
+
+/**
+ * GET /api/admin/tenants/:id/tiendas
+ * Lista las sucursales de un tenant.
+ */
+const getTiendas = async (req, res) => {
+  try {
+    const { id: tenantId } = req.params;
+
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) return res.status(404).json({ message: 'Tienda no encontrada.' });
+
+    const tiendas = await prisma.tienda.findMany({
+      where: { tenantId },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json({ tiendas });
+  } catch (error) {
+    console.error('[admin:getTiendas]', error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * POST /api/admin/tenants/:id/tiendas
+ * Crea una sucursal para un tenant.
+ */
+const createTienda = async (req, res) => {
+  try {
+    const { id: tenantId } = req.params;
+    const { name, address } = req.body;
+
+    if (!name) return res.status(400).json({ message: 'name es requerido.' });
+
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) return res.status(404).json({ message: 'Tienda no encontrada.' });
+
+    const existing = await prisma.tienda.findUnique({
+      where: { name_tenantId: { name, tenantId } },
+    });
+    if (existing) return res.status(409).json({ message: 'Ya existe una sucursal con ese nombre en este tenant.' });
+
+    const tienda = await prisma.tienda.create({
+      data: { name, address: address || null, tenantId },
+    });
+
+    res.status(201).json(tienda);
+  } catch (error) {
+    console.error('[admin:createTienda]', error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * PUT /api/admin/tenants/:id/tiendas/:tiendaId
+ * Edita nombre y/o dirección de una sucursal.
+ */
+const updateTienda = async (req, res) => {
+  try {
+    const { id: tenantId, tiendaId } = req.params;
+    const { name, address } = req.body;
+
+    const tienda = await prisma.tienda.findFirst({ where: { id: tiendaId, tenantId } });
+    if (!tienda) return res.status(404).json({ message: 'Sucursal no encontrada.' });
+
+    const data = {};
+    if (name !== undefined) {
+      if (!name) return res.status(400).json({ message: 'name no puede estar vacío.' });
+      data.name = name;
+    }
+    if (address !== undefined) data.address = address || null;
+
+    if (!Object.keys(data).length) {
+      return res.status(400).json({ message: 'Nada que actualizar.' });
+    }
+
+    const updated = await prisma.tienda.update({ where: { id: tiendaId }, data });
+    res.json(updated);
+  } catch (error) {
+    console.error('[admin:updateTienda]', error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * DELETE /api/admin/tenants/:id/tiendas/:tiendaId
+ * Elimina una sucursal. Los usuarios asignados quedan con tiendaId=null
+ * (no se bloquea el borrado por eso — asignación es opcional/informativa).
+ */
+const deleteTienda = async (req, res) => {
+  try {
+    const { id: tenantId, tiendaId } = req.params;
+
+    const tienda = await prisma.tienda.findFirst({ where: { id: tiendaId, tenantId } });
+    if (!tienda) return res.status(404).json({ message: 'Sucursal no encontrada.' });
+
+    await prisma.$transaction([
+      prisma.user.updateMany({ where: { tiendaId }, data: { tiendaId: null } }),
+      prisma.tienda.delete({ where: { id: tiendaId } }),
+    ]);
+
+    res.json({ message: 'Sucursal eliminada exitosamente.' });
+  } catch (error) {
+    console.error('[admin:deleteTienda]', error);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
@@ -446,7 +760,8 @@ const getExpiringTenants = async (req, res) => {
 };
 
 module.exports = {
-  getTenants, getTenantById, updateTenant, getStats, registerPayment, getPayments,
-  createTenantUser, deleteTenantUser, getExpiringTenants,
+  createTenant, getTenants, getTenantById, updateTenant, getStats, registerPayment, getPayments, getBillingReport,
+  createTenantUser, updateTenantUser, deleteTenantUser, getExpiringTenants,
   updateModules, addModuleAddon,
+  getTiendas, createTienda, updateTienda, deleteTienda,
 };

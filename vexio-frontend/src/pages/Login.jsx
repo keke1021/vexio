@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -33,7 +33,7 @@ const Login = () => {
     mutationFn: (data) => api.post('/auth/login', data).then((r) => r.data),
     onSuccess: (data) => {
       login(data);
-      navigate('/dashboard');
+      navigate(data.user.role === 'SUPERADMIN' ? '/admin' : '/dashboard');
     },
     onError: (err) => {
       setError(err.response?.data?.message || 'Error al iniciar sesión.');
@@ -90,13 +90,6 @@ const Login = () => {
             </div>
           </form>
         </div>
-
-        <p className="mt-6 text-center text-[13px] text-[#94A3B8]">
-          ¿No tenés cuenta?{' '}
-          <Link to="/register" className="text-[#3B82F6] hover:text-[#2563EB] transition-colors font-medium">
-            Registrá tu tienda
-          </Link>
-        </p>
 
       </div>
     </div>

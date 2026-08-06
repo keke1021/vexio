@@ -6,9 +6,9 @@ const fmtDateShort = (d) =>
   d ? new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
 
 const PLAN_CONFIG = {
-  STARTER: { label: 'Starter', cls: 'text-violet-600 bg-violet-50', mrr: 19 },
-  PRO:     { label: 'Pro',     cls: 'text-violet-700 bg-violet-100', mrr: 39 },
-  FULL:    { label: 'Full',    cls: 'text-fuchsia-700 bg-fuchsia-50 ring-1 ring-fuchsia-200', mrr: 69 },
+  STARTER: { label: 'Starter', cls: 'text-violet-600 bg-violet-50' },
+  PRO:     { label: 'Pro',     cls: 'text-violet-700 bg-violet-100' },
+  FULL:    { label: 'Full',    cls: 'text-fuchsia-700 bg-fuchsia-50 ring-1 ring-fuchsia-200' },
 };
 
 const STATUS_CONFIG = {
@@ -29,6 +29,8 @@ const StatCard = ({ label, value, sub, accent }) => (
   </div>
 );
 
+const CURRENCIES = ['ARS', 'USD', 'USDT'];
+
 const AdminStats = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['admin-stats'],
@@ -42,12 +44,22 @@ const AdminStats = () => {
     staleTime: 60_000,
   });
 
+  // Facturación real (LedgerEntry type=SUBSCRIPTION_PAYMENT). Esta es la
+  // única vista de todo el sistema donde ese type aparece — en
+  // Caja/Reportes/POS/Proveedores/Inventario queda excluido a propósito
+  // (ver TENANT_BALANCE_EXCLUDED_TYPES).
+  const { data: billingData } = useQuery({
+    queryKey: ['admin-billing-report'],
+    queryFn: () => api.get('/admin/billing-report').then((r) => r.data),
+    staleTime: 60_000,
+  });
+
   const expiring = expiringData?.tenants ?? [];
+  const billingByCurrency = billingData?.byCurrency ?? {};
 
   if (isLoading) return <div className="px-6 pt-8 text-[#CBD5E1] text-[13px]">Cargando...</div>;
 
   const byStatus = data?.byStatus ?? {};
-  const byPlan   = data?.byPlan ?? {};
 
   return (
     <div className="px-6 pt-8 pb-16 max-w-[900px] mx-auto">
@@ -60,13 +72,7 @@ const AdminStats = () => {
 
       <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A] mb-8">Métricas globales</h1>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-        <StatCard
-          label="MRR estimado"
-          value={`$${data?.mrr ?? 0}`}
-          sub="USD/mes · tiendas activas"
-          accent="text-violet-700"
-        />
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
         <StatCard label="Total tiendas"  value={data?.totalTenants ?? 0} />
         <StatCard label="Tiendas activas" value={data?.activeTenants ?? 0} accent="text-emerald-600" />
         <StatCard label="Stock total" value={data?.totalItems ?? 0} sub="equipos disponibles" />
@@ -87,27 +93,32 @@ const AdminStats = () => {
 
       <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-5 mb-8"
         style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-        <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-4">Por plan</p>
-        <div className="grid grid-cols-3 gap-5">
-          {Object.entries(PLAN_CONFIG).map(([plan, cfg]) => {
-            const count = byPlan[plan] ?? 0;
-            return (
-              <div key={plan} className={`rounded-xl border px-4 py-4 ${
-                plan === 'FULL' ? 'border-fuchsia-200 bg-fuchsia-50' :
-                plan === 'PRO'  ? 'border-violet-200 bg-violet-50' :
-                'border-[#E2E8F0] bg-[#F8FAFC]'
-              }`}>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium mb-3 ${cfg.cls}`}>
-                  {cfg.label}
-                </span>
-                <p className="text-[32px] font-bold text-[#0F172A]">{count}</p>
-                <p className="text-[11px] text-[#94A3B8] mt-1">
-                  ${cfg.mrr * count}/mes · ${cfg.mrr}/u
-                </p>
-              </div>
-            );
-          })}
-        </div>
+        <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-1">
+          Facturación real cobrada
+        </p>
+        <p className="text-[11px] text-[#CBD5E1] mb-4">
+          Desde LedgerEntry (pagos efectivamente registrados).
+        </p>
+        {Object.keys(billingByCurrency).length === 0 ? (
+          <p className="text-[13px] text-[#CBD5E1]">Sin pagos registrados todavía.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {CURRENCIES.filter((c) => billingByCurrency[c]).map((cur) => {
+              const b = billingByCurrency[cur];
+              const total = (b.MONTHLY ?? 0) + (b.IMPLEMENTATION ?? 0);
+              return (
+                <div key={cur} className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-4">
+                  <p className="text-[11px] font-bold text-[#64748B] mb-2">{cur}</p>
+                  <p className="text-[24px] font-bold text-[#0F172A] mb-2">{total.toFixed(2)}</p>
+                  <div className="space-y-0.5">
+                    <p className="text-[11px] text-[#94A3B8]">Mensualidades: <span className="text-[#64748B] font-medium">{(b.MONTHLY ?? 0).toFixed(2)}</span></p>
+                    <p className="text-[11px] text-[#94A3B8]">Implementación: <span className="text-[#64748B] font-medium">{(b.IMPLEMENTATION ?? 0).toFixed(2)}</span></p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-8">

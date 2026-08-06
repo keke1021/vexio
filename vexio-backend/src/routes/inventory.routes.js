@@ -4,7 +4,7 @@ const { authenticate, authorize } = require('../middlewares/auth.middleware');
 const {
   getAll, getAlerts, getById, create, update, remove,
   getSuppliers, createSupplier,
-  getProducts, bulkUpload,
+  getProducts, getTiendas, bulkUpload,
 } = require('../controllers/inventory.controller');
 
 const router = express.Router();
@@ -15,6 +15,9 @@ router.use(authenticate);
 
 // ─── Products (autocomplete para formularios) ─────────────────────────────────
 router.get('/products', getProducts);
+
+// ─── Tiendas (lookup para formularios, self-service del propio tenant) ────────
+router.get('/tiendas', getTiendas);
 
 // ─── Inventory ────────────────────────────────────────────────────────────────
 // IMPORTANTE: rutas estáticas ANTES de /:id
