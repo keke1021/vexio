@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
+import CashSessionsTable from './CashSessionsTable';
 
 const PAYMENT_LABELS = {
   CASH:         'Efectivo',
@@ -150,6 +151,24 @@ const SaleDetailModal = ({ saleId, onClose }) => {
     </div>
   );
 };
+
+// Resumen compacto de la sesión activa — se muestra centrado, en vez de
+// enterrar "quién abrió la caja" en una línea chica bajo el título. Solo
+// datos que ya vienen en `session` (openedBy), nada nuevo del backend.
+const SessionSummaryCard = ({ session }) => (
+  <div className="bg-white border border-[#E2E8F0] rounded-xl px-6 py-5 max-w-sm w-full text-center"
+    style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-200 text-[11px] font-medium mb-3">
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+      Caja abierta
+    </span>
+    <p className="text-[13px] text-[#94A3B8] mb-1">Abierta desde las {fmtTime(session.openedAt)}</p>
+    <p className="text-[18px] font-semibold text-[#0F172A] leading-tight">
+      {session.openedBy?.name ?? '—'}
+    </p>
+    <p className="text-[11px] text-[#94A3B8] mt-0.5">abrió esta caja</p>
+  </div>
+);
 
 const OpenPanel = ({ onOpen, isPending }) => {
   const [amounts, setAmounts] = useState({ ARS: '', USD: '', USDT: '' });
@@ -324,6 +343,11 @@ const CashMain = () => {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['cash-summary'] });
     queryClient.invalidateQueries({ queryKey: ['cash-movements'] });
+    // El historial embebido (CashSessionsTable) queda obsoleto igual que el
+    // resumen/movimientos al abrir o cerrar caja — antes esto no hacía
+    // falta porque el historial vivía en una pantalla aparte que siempre
+    // arrancaba con una consulta nueva al entrar.
+    queryClient.invalidateQueries({ queryKey: ['cash-sessions'] });
   };
 
   const openMutation = useMutation({
@@ -368,11 +392,9 @@ const CashMain = () => {
               </select>
             </div>
           )}
-          {session && (
+          {session && !isOpen && (
             <p className="text-[13px] text-[#94A3B8] mt-0.5">
-              {isOpen
-                ? `Abierta desde las ${fmtTime(session.openedAt)} · ${session.openedBy?.name}`
-                : `Cerrada el ${fmtDate(session.closedAt)} a las ${fmtTime(session.closedAt)}`}
+              {`Cerrada el ${fmtDate(session.closedAt)} a las ${fmtTime(session.closedAt)}`}
             </p>
           )}
         </div>
@@ -397,12 +419,6 @@ const CashMain = () => {
               Cerrar caja →
             </button>
           )}
-          <Link
-            to="/cash/sessions"
-            className="text-[12px] text-[#94A3B8] hover:text-[#3B82F6] transition-colors ml-2"
-          >
-            Ver historial de cajas →
-          </Link>
         </div>
       </div>
 
@@ -423,14 +439,22 @@ const CashMain = () => {
           {error && <p className="text-[13px] text-red-500 mb-5">{error}</p>}
 
           {!loadingSummary && !session && canManage && (
-            <OpenPanel onOpen={openMutation.mutate} isPending={openMutation.isPending} />
+            <div className="flex justify-center mb-8">
+              <OpenPanel onOpen={openMutation.mutate} isPending={openMutation.isPending} />
+            </div>
           )}
           {!loadingSummary && !session && !canManage && (
-            <p className="text-[#94A3B8] text-[13px]">No hay caja abierta hoy.</p>
+            <p className="text-[#94A3B8] text-[13px] text-center">No hay caja abierta hoy.</p>
           )}
 
+      {!loadingSummary && session && isOpen && !showClose && (
+        <div className="flex justify-center mb-8">
+          <SessionSummaryCard session={session} />
+        </div>
+      )}
+
       {showClose && (
-        <div className="mb-8">
+        <div className="flex justify-center mb-8">
           <ClosePanel
             byCurrency={byCurrency}
             onClose={closeMutation.mutate}
@@ -441,7 +465,7 @@ const CashMain = () => {
       )}
 
       {!loadingSummary && session && !isOpen && canManage && (
-        <div className="mb-8">
+        <div className="flex justify-center mb-8">
           <OpenPanel onOpen={openMutation.mutate} isPending={openMutation.isPending} />
         </div>
       )}
@@ -577,6 +601,11 @@ const CashMain = () => {
           </div>
         </>
       )}
+
+      <div className="mt-10">
+        <p className="text-[11px] text-[#3B82F6] uppercase tracking-widest font-medium mb-3">Historial de cajas</p>
+        <CashSessionsTable tiendaId={tiendaId} showTiendaColumn={false} />
+      </div>
         </>
       )}
       {selectedSaleId && (

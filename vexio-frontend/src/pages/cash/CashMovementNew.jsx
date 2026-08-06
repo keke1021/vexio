@@ -66,6 +66,11 @@ const CashMovementNew = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cash-movements'] });
       queryClient.invalidateQueries({ queryKey: ['cash-summary'] });
+      // Mismo motivo que en CashMain.jsx (invalidate()): el "Balance final"
+      // de la sesión abierta en el historial embebido de /cash sale de
+      // GET /cash/sessions — sin esto quedaba desactualizado hasta el
+      // staleTime (30s) o una recarga después de cargar un movimiento manual.
+      queryClient.invalidateQueries({ queryKey: ['cash-sessions'] });
       navigate('/cash');
     },
     onError: (err) => setError(err.response?.data?.message || 'Error al registrar el movimiento.'),
