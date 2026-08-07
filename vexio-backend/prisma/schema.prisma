@@ -533,6 +533,7 @@ model Sale {
 
   customerName  String?
   customerPhone String?
+  customerEmail String?
   notes         String?
 
   exchangeRate    Decimal?      @db.Decimal(18, 6)

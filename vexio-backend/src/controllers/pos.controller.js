@@ -110,7 +110,7 @@ const searchItem = async (req, res) => {
 const createSale = async (req, res) => {
   try {
     const { tenantId, userId } = req.user;
-    const { items, paymentMethod, currency, customerName, customerPhone, notes, tiendaId } = req.body;
+    const { items, paymentMethod, currency, customerName, customerPhone, customerEmail, notes, tiendaId } = req.body;
 
     if (!items?.length) {
       return res.status(400).json({ message: 'El carrito no puede estar vacío.' });
@@ -254,6 +254,7 @@ const createSale = async (req, res) => {
           currencyCode: saleCurr,
           customerName:  customerName  || null,
           customerPhone: customerPhone || null,
+          customerEmail: customerEmail || null,
           notes:         notes         || null,
           exchangeRate:    appliedRate,
           referenceRateId: referenceRate?.id ?? null,

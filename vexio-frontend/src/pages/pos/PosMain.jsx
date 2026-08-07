@@ -180,6 +180,35 @@ const CartItem = ({ entry, displayPrice, currency, onRemove, onSetPrice }) => {
   );
 };
 
+// ─── Modal: venta sin cliente asociado ─────────────────────────────────────────
+// Se muestra al confirmar una venta cuando no hay un cliente VÁLIDO cargado
+// (nombre + al menos teléfono o email — ver hasValidCustomer en PosMain). Solo
+// interrumpe el click de "Confirmar venta", no bloquea el botón en sí.
+
+const NoCustomerModal = ({ onAddData, onSellAnyway }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div className="bg-white rounded-xl w-full max-w-sm shadow-xl p-6">
+      <p className="text-[14px] text-[#0F172A] leading-relaxed">
+        No hay ningún cliente asociado a esta venta. ¿Querés continuar igual?
+      </p>
+      <div className="mt-5 flex flex-col gap-2">
+        <button
+          onClick={onAddData}
+          className="w-full py-2.5 rounded-lg text-[13px] font-bold bg-[#3B82F6] hover:bg-[#2563EB] text-white transition-colors"
+        >
+          Agregar datos
+        </button>
+        <button
+          onClick={onSellAnyway}
+          className="w-full py-2.5 rounded-lg text-[13px] font-medium bg-[#F8FAFC] hover:bg-[#EFF6FF] text-[#64748B] border border-[#E2E8F0] transition-colors"
+        >
+          Vender sin cliente
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 // ─── Rates Widget ─────────────────────────────────────────────────────────────
 // Solo muestra la cotización en vivo y una calculadora de referencia. Ya no
 // tiene selector "Tipo de cambio para la venta" (BLUE/USDT/NONE) — el
@@ -275,8 +304,12 @@ const PosMain = () => {
   const [paymentMethod, setPaymentMethod] = useState('');
   const [saleCurrency, setSaleCurrency]   = useState('ARS');
   const [customerName, setCustomerName]   = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [showCustomer, setShowCustomer]   = useState(false);
+  const [showNoCustomerModal, setShowNoCustomerModal] = useState(false);
   const [saleError, setSaleError]         = useState('');
+  const customerNameRef = useRef(null);
 
   // Toda venta pertenece a una sucursal (igual que Caja) — tiendaId viaja en
   // la URL para poder compartirse/refrescarse, auto-preseleccionada si el
@@ -375,6 +408,11 @@ const PosMain = () => {
   const canConfirm = cart.length > 0 && paymentMethod && !!tiendaId;
   const noRateWarn = saleCurrency !== 'ARS' && !activeRate;
 
+  // Un cliente cuenta como "asociado" solo con nombre completo + al menos
+  // teléfono o email — un nombre solo (sin ningún dato de contacto) no
+  // alcanza. Ver NoCustomerModal más arriba.
+  const hasValidCustomer = customerName.trim() !== '' && (customerPhone.trim() !== '' || customerEmail.trim() !== '');
+
   // ─── Sale mutation ────────────────────────────────────────────────────────
   const saleMutation = useMutation({
     mutationFn: (data) => api.post('/pos/sales', data).then((r) => r.data),
@@ -397,9 +435,36 @@ const PosMain = () => {
       items:        cart.map((c) => ({ inventoryItemId: c.item.id, salePrice: getDisplayPrice(c) })),
       paymentMethod,
       currency:     saleCurrency,
-      customerName: customerName || undefined,
+      customerName:  customerName  || undefined,
+      customerPhone: customerPhone || undefined,
+      customerEmail: customerEmail || undefined,
       tiendaId,
     });
+  };
+
+  // Click en "Confirmar venta": si no hay un cliente válido asociado
+  // (hasValidCustomer), interrumpe con NoCustomerModal en vez de vender
+  // directo — no cambia canConfirm ni deshabilita el botón, solo lo que
+  // pasa al hacer click.
+  const handleConfirmClick = () => {
+    if (!hasValidCustomer) {
+      setShowNoCustomerModal(true);
+      return;
+    }
+    handleConfirm();
+  };
+
+  const handleAddCustomerData = () => {
+    setShowNoCustomerModal(false);
+    setShowCustomer(true);
+    // Esperar al render del formulario (recién visible si showCustomer
+    // estaba en false) antes de enfocar.
+    setTimeout(() => customerNameRef.current?.focus(), 0);
+  };
+
+  const handleSellAnyway = () => {
+    setShowNoCustomerModal(false);
+    handleConfirm();
   };
 
   const handleSearchKeyDown = (e) => {
@@ -586,7 +651,10 @@ const PosMain = () => {
             </div>
           </div>
 
-          {/* Cliente */}
+          {/* Cliente — nombre completo, teléfono, email. Ninguno es
+              obligatorio por sí solo (ver hasValidCustomer): un cliente
+              cuenta como asociado recién con nombre + al menos uno de los
+              otros dos. */}
           <div>
             <button
               onClick={() => setShowCustomer(!showCustomer)}
@@ -595,21 +663,40 @@ const PosMain = () => {
               {showCustomer ? '↑ Ocultar' : '+ Agregar'} cliente
             </button>
             {showCustomer && (
-              <input
-                type="text"
-                placeholder="Nombre del cliente"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                className="mt-2 w-full bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#0F172A]
-                  placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-all"
-              />
+              <div className="mt-2 space-y-2">
+                <input
+                  ref={customerNameRef}
+                  type="text"
+                  placeholder="Nombre completo"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="w-full bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#0F172A]
+                    placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-all"
+                />
+                <input
+                  type="tel"
+                  placeholder="Teléfono"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  className="w-full bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#0F172A]
+                    placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-all"
+                />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  className="w-full bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#0F172A]
+                    placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-all"
+                />
+              </div>
             )}
           </div>
 
           {saleError && <p className="text-[12px] text-red-500">{saleError}</p>}
 
           <button
-            onClick={handleConfirm}
+            onClick={handleConfirmClick}
             disabled={!canConfirm || saleMutation.isPending}
             className={`w-full py-3.5 rounded-xl text-[14px] font-bold transition-all ${
               canConfirm && !saleMutation.isPending
@@ -629,6 +716,9 @@ const PosMain = () => {
         </div>
       </div>
       </div>
+      {showNoCustomerModal && (
+        <NoCustomerModal onAddData={handleAddCustomerData} onSellAnyway={handleSellAnyway} />
+      )}
     </div>
   );
 };

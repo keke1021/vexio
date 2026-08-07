@@ -119,6 +119,12 @@ const PosSaleDetail = () => {
               <span className="text-[#0F172A] print:text-black">{sale.customerPhone}</span>
             </div>
           )}
+          {sale.customerEmail && (
+            <div className="flex justify-between text-[13px]">
+              <span className="text-[#0F172A] print:text-black">Email</span>
+              <span className="text-[#0F172A] print:text-black">{sale.customerEmail}</span>
+            </div>
+          )}
         </div>
 
         <div className="border border-[#E2E8F0] rounded-xl overflow-hidden mb-4 bg-white print:border-gray-200"
