@@ -23,9 +23,9 @@ const fmtDate = (d) =>
 const StatCard = ({ label, value, sub, accent }) => (
   <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4"
     style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-    <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.15em] mb-2">{label}</p>
+    <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.15em] mb-2">{label}</p>
     <p className={`text-[26px] font-bold tracking-tight ${accent ?? 'text-[#0F172A]'}`}>{value}</p>
-    {sub && <p className="text-[11px] text-[#94A3B8] mt-1">{sub}</p>}
+    {sub && <p className="text-[11px] text-[#475569] mt-1">{sub}</p>}
   </div>
 );
 
@@ -57,7 +57,7 @@ const AdminStats = () => {
   const expiring = expiringData?.tenants ?? [];
   const billingByCurrency = billingData?.byCurrency ?? {};
 
-  if (isLoading) return <div className="px-6 pt-8 text-[#CBD5E1] text-[13px]">Cargando...</div>;
+  if (isLoading) return <div className="px-6 pt-8 text-[#64748B] text-[13px]">Cargando...</div>;
 
   const byStatus = data?.byStatus ?? {};
 
@@ -65,7 +65,7 @@ const AdminStats = () => {
     <div className="px-6 pt-8 pb-16 max-w-[900px] mx-auto">
 
       <div className="flex items-center gap-3 mb-8">
-        <Link to="/admin" className="text-[#94A3B8] hover:text-[#64748B] transition-colors text-[13px]">← Tiendas</Link>
+        <Link to="/admin" className="text-[#475569] hover:text-[#64748B] transition-colors text-[13px]">← Tiendas</Link>
         <span className="text-[#E2E8F0]">/</span>
         <span className="text-[13px] text-[#64748B]">Métricas</span>
       </div>
@@ -80,11 +80,11 @@ const AdminStats = () => {
 
       <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-5 mb-6"
         style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-        <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-4">Por estado</p>
+        <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.12em] mb-4">Por estado</p>
         <div className="flex gap-8">
           {Object.entries(STATUS_CONFIG).map(([status, cfg]) => (
             <div key={status}>
-              <p className="text-[11px] text-[#94A3B8] mb-0.5">{cfg.label}</p>
+              <p className="text-[11px] text-[#475569] mb-0.5">{cfg.label}</p>
               <p className={`text-[28px] font-bold ${cfg.cls}`}>{byStatus[status] ?? 0}</p>
             </div>
           ))}
@@ -93,14 +93,14 @@ const AdminStats = () => {
 
       <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-5 mb-8"
         style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-        <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-1">
+        <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.12em] mb-1">
           Facturación real cobrada
         </p>
-        <p className="text-[11px] text-[#CBD5E1] mb-4">
+        <p className="text-[11px] text-[#64748B] mb-4">
           Desde LedgerEntry (pagos efectivamente registrados).
         </p>
         {Object.keys(billingByCurrency).length === 0 ? (
-          <p className="text-[13px] text-[#CBD5E1]">Sin pagos registrados todavía.</p>
+          <p className="text-[13px] text-[#64748B]">Sin pagos registrados todavía.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {CURRENCIES.filter((c) => billingByCurrency[c]).map((cur) => {
@@ -111,8 +111,8 @@ const AdminStats = () => {
                   <p className="text-[11px] font-bold text-[#64748B] mb-2">{cur}</p>
                   <p className="text-[24px] font-bold text-[#0F172A] mb-2">{total.toFixed(2)}</p>
                   <div className="space-y-0.5">
-                    <p className="text-[11px] text-[#94A3B8]">Mensualidades: <span className="text-[#64748B] font-medium">{(b.MONTHLY ?? 0).toFixed(2)}</span></p>
-                    <p className="text-[11px] text-[#94A3B8]">Implementación: <span className="text-[#64748B] font-medium">{(b.IMPLEMENTATION ?? 0).toFixed(2)}</span></p>
+                    <p className="text-[11px] text-[#475569]">Mensualidades: <span className="text-[#64748B] font-medium">{(b.MONTHLY ?? 0).toFixed(2)}</span></p>
+                    <p className="text-[11px] text-[#475569]">Implementación: <span className="text-[#64748B] font-medium">{(b.IMPLEMENTATION ?? 0).toFixed(2)}</span></p>
                   </div>
                 </div>
               );
@@ -153,7 +153,7 @@ const AdminStats = () => {
                         <span className={`text-[12px] font-medium tabular-nums ${daysLeft <= 2 ? 'text-red-500' : 'text-amber-600'}`}>
                           {daysLeft <= 0 ? 'Vencido' : `${daysLeft}d`}
                         </span>
-                        <span className="text-[11px] text-[#CBD5E1] ml-2">{fmtDateShort(t.subscriptionEndsAt)}</span>
+                        <span className="text-[11px] text-[#64748B] ml-2">{fmtDateShort(t.subscriptionEndsAt)}</span>
                       </td>
                     </tr>
                   );
@@ -188,7 +188,7 @@ const AdminStats = () => {
                         {PLAN_CONFIG[t.plan]?.label ?? t.plan}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-[#CBD5E1] text-[12px] text-right">{fmtDate(t.createdAt)}</td>
+                    <td className="px-4 py-3 text-[#64748B] text-[12px] text-right">{fmtDate(t.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>

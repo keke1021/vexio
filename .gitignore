@@ -1,1 +1,5 @@
 .claude/settings.json
+
+# Logs/reportes de corridas del stress test funcional — datos generados,
+# distintos en cada corrida, no artefactos del proyecto.
+vexio-backend/scripts/stress-test/out/

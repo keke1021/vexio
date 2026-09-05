@@ -56,25 +56,25 @@ const CashSessionsTable = ({ tiendaId, showTiendaColumn = true, pageSize = 20 })
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Apertura</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Cierre</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Apertura</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Cierre</th>
               {showTiendaColumn && (
-                <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Sucursal</th>
+                <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden sm:table-cell">Sucursal</th>
               )}
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Abrió</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Cerró</th>
-              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Balance final</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Abrió</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Cerró</th>
+              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Balance final</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={colSpan} className="text-center py-16 text-[#CBD5E1] text-[13px]">Cargando...</td></tr>
+              <tr><td colSpan={colSpan} className="text-center py-16 text-[#64748B] text-[13px]">Cargando...</td></tr>
             )}
             {isError && (
               <tr><td colSpan={colSpan} className="text-center py-16 text-red-400 text-[13px]">Error al cargar el historial.</td></tr>
             )}
             {!isLoading && !isError && sessions.length === 0 && (
-              <tr><td colSpan={colSpan} className="text-center py-16 text-[#CBD5E1] text-[13px]">Todavía no hay ninguna sesión de caja.</td></tr>
+              <tr><td colSpan={colSpan} className="text-center py-16 text-[#64748B] text-[13px]">Todavía no hay ninguna sesión de caja.</td></tr>
             )}
             {sessions.map((s) => {
               const activeCurrencies = CURRENCIES.filter((c) => s.byCurrency?.[c]);
@@ -96,12 +96,12 @@ const CashSessionsTable = ({ tiendaId, showTiendaColumn = true, pageSize = 20 })
                     )}
                   </td>
                   {showTiendaColumn && (
-                    <td className="px-4 py-3.5 text-[#94A3B8] hidden sm:table-cell">{s.tienda?.name ?? '—'}</td>
+                    <td className="px-4 py-3.5 text-[#475569] hidden sm:table-cell">{s.tienda?.name ?? '—'}</td>
                   )}
-                  <td className="px-4 py-3.5 text-[#94A3B8] hidden md:table-cell">{s.openedBy?.name ?? '—'}</td>
-                  <td className="px-4 py-3.5 text-[#94A3B8] hidden md:table-cell">{s.closedBy?.name ?? '—'}</td>
+                  <td className="px-4 py-3.5 text-[#475569] hidden md:table-cell">{s.openedBy?.name ?? '—'}</td>
+                  <td className="px-4 py-3.5 text-[#475569] hidden md:table-cell">{s.closedBy?.name ?? '—'}</td>
                   <td className="px-4 py-3.5 text-right tabular-nums">
-                    {activeCurrencies.length === 0 && <span className="text-[#CBD5E1]">—</span>}
+                    {activeCurrencies.length === 0 && <span className="text-[#64748B]">—</span>}
                     {activeCurrencies.map((cur) => (
                       <p key={cur} className={`font-medium ${s.byCurrency[cur].balance >= 0 ? 'text-[#0F172A]' : 'text-red-500'}`}>
                         {fmtByCurrency(s.byCurrency[cur].balance, cur)}
@@ -122,7 +122,7 @@ const CashSessionsTable = ({ tiendaId, showTiendaColumn = true, pageSize = 20 })
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
-          <p className="text-[12px] text-[#94A3B8]">Página {page} de {totalPages}</p>
+          <p className="text-[12px] text-[#475569]">Página {page} de {totalPages}</p>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage((p) => Math.max(p - 1, 1))}

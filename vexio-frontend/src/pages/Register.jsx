@@ -21,7 +21,7 @@ const InputField = ({ label, hint, type, placeholder, value, onChange, required,
         ${small ? 'py-2 text-[12px]' : 'py-3 text-sm'}
         ${monospace ? 'font-mono' : ''}`}
     />
-    {hint && <p className="mt-1.5 text-[11px] text-[#CBD5E1]">{hint}</p>}
+    {hint && <p className="mt-1.5 text-[11px] text-[#64748B]">{hint}</p>}
   </div>
 );
 
@@ -83,7 +83,7 @@ const Register = () => {
 
         <div className="mb-8 text-center">
           <h1 className="text-[28px] font-bold tracking-tight text-[#0F172A]">Vexio</h1>
-          <p className="mt-2 text-[13px] text-[#94A3B8] tracking-wide">Registrá tu tienda</p>
+          <p className="mt-2 text-[13px] text-[#475569] tracking-wide">Registrá tu tienda</p>
         </div>
 
         <div className="bg-white rounded-2xl p-8 border border-[#E2E8F0]" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
@@ -99,7 +99,7 @@ const Register = () => {
 
             {/* Slug — generado automáticamente, editable pero discreto */}
             <div>
-              <label className="block text-[10px] font-medium text-[#CBD5E1] mb-1 uppercase tracking-[0.15em]">
+              <label className="block text-[10px] font-medium text-[#64748B] mb-1 uppercase tracking-[0.15em]">
                 ID de la tienda (generado automáticamente)
               </label>
               <input
@@ -108,7 +108,7 @@ const Register = () => {
                 value={form.tenantSlug}
                 onChange={handleSlugChange}
                 required
-                className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg px-3 py-1.5 text-[12px] text-[#94A3B8]
+                className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg px-3 py-1.5 text-[12px] text-[#475569]
                   font-mono placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-all"
               />
             </div>
@@ -156,7 +156,7 @@ const Register = () => {
           </form>
         </div>
 
-        <p className="mt-6 text-center text-[13px] text-[#94A3B8]">
+        <p className="mt-6 text-center text-[13px] text-[#475569]">
           ¿Ya tenés cuenta?{' '}
           <Link to="/login" className="text-[#3B82F6] hover:text-[#2563EB] transition-colors font-medium">
             Iniciá sesión

@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 const STATUS_CONFIG = {
   PENDING:   { label: 'Pendiente', cls: 'text-orange-500 bg-orange-50' },
   RECEIVED:  { label: 'Recibida',  cls: 'text-emerald-600 bg-emerald-50' },
-  CANCELLED: { label: 'Cancelada', cls: 'text-[#94A3B8] bg-[#F1F5F9]' },
+  CANCELLED: { label: 'Cancelada', cls: 'text-[#475569] bg-[#F1F5F9]' },
 };
 
 const CURRENCIES = ['ARS', 'USD', 'USDT'];
@@ -32,7 +32,7 @@ const SOURCE_LABELS = {
 
 const SOURCE_BADGE_CLS = {
   CASH_REGISTER: 'text-[#3B82F6] bg-[#EFF6FF]',
-  EXTERNAL:      'text-[#94A3B8] bg-[#F1F5F9]',
+  EXTERNAL:      'text-[#475569] bg-[#F1F5F9]',
 };
 
 // Uno o dos badges según paymentSources (["CASH_REGISTER"], ["EXTERNAL"], o
@@ -56,7 +56,7 @@ const SourceBadges = ({ sources }) => {
 };
 
 const StatusBadge = ({ status }) => {
-  const cfg = STATUS_CONFIG[status] ?? { label: status, cls: 'text-[#94A3B8] bg-[#F1F5F9]' };
+  const cfg = STATUS_CONFIG[status] ?? { label: status, cls: 'text-[#475569] bg-[#F1F5F9]' };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${cfg.cls}`}>
       {cfg.label}
@@ -67,9 +67,9 @@ const StatusBadge = ({ status }) => {
 const StatCard = ({ label, value, sub }) => (
   <div className="bg-white border border-[#E2E8F0] rounded-xl px-4 py-3.5"
     style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-    <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.15em] mb-1.5">{label}</p>
+    <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.15em] mb-1.5">{label}</p>
     <p className="text-[20px] font-bold tracking-tight text-[#0F172A]">{value}</p>
-    {sub && <p className="text-[11px] text-[#94A3B8] mt-0.5">{sub}</p>}
+    {sub && <p className="text-[11px] text-[#475569] mt-0.5">{sub}</p>}
   </div>
 );
 
@@ -99,20 +99,20 @@ const PaymentPanel = ({ order, tiendas, onSubmit, isPending, error }) => {
       <td colSpan={6} className="px-4 py-4">
         <div className="grid sm:grid-cols-2 gap-5">
           <div>
-            <p className="text-[10px] text-[#94A3B8] uppercase tracking-[0.12em] mb-2">Historial de pagos</p>
+            <p className="text-[10px] text-[#475569] uppercase tracking-[0.12em] mb-2">Historial de pagos</p>
             {(!order.payments || order.payments.length === 0) ? (
-              <p className="text-[12px] text-[#CBD5E1]">Todavía no se registró ningún pago.</p>
+              <p className="text-[12px] text-[#64748B]">Todavía no se registró ningún pago.</p>
             ) : (
               <div className="space-y-1.5">
                 {order.payments.map((p) => (
                   <div key={p.id} className="flex items-center justify-between text-[12px] bg-white border border-[#E2E8F0] rounded-lg px-3 py-2">
                     <div>
                       <p className="text-[#0F172A] font-medium">{fmtByCurrency(p.amount, p.currencyCode)}</p>
-                      <p className="text-[#94A3B8]">
+                      <p className="text-[#475569]">
                         {SOURCE_LABELS[p.source] ?? p.source}{p.tienda ? ` · ${p.tienda.name}` : ''} · {p.paidBy?.name ?? '—'}
                       </p>
                     </div>
-                    <p className="text-[#94A3B8]">{fmtDate(p.paidAt)}</p>
+                    <p className="text-[#475569]">{fmtDate(p.paidAt)}</p>
                   </div>
                 ))}
               </div>
@@ -120,7 +120,7 @@ const PaymentPanel = ({ order, tiendas, onSubmit, isPending, error }) => {
           </div>
 
           <div>
-            <p className="text-[10px] text-[#94A3B8] uppercase tracking-[0.12em] mb-2">Registrar pago</p>
+            <p className="text-[10px] text-[#475569] uppercase tracking-[0.12em] mb-2">Registrar pago</p>
             {order.pending <= 0 ? (
               <p className="text-[12px] text-emerald-600">Orden saldada — no queda pendiente.</p>
             ) : (
@@ -148,7 +148,7 @@ const PaymentPanel = ({ order, tiendas, onSubmit, isPending, error }) => {
                       className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${
                         source === opt.value
                           ? 'bg-[#3B82F6] text-white border-transparent'
-                          : 'bg-white border-[#E2E8F0] text-[#94A3B8] hover:text-[#64748B]'
+                          : 'bg-white border-[#E2E8F0] text-[#475569] hover:text-[#64748B]'
                       }`}
                     >
                       {opt.label}
@@ -243,12 +243,12 @@ const SuppliersDetail = () => {
   const stats  = supplier?.stats;
 
   if (loadingSupplier) {
-    return <div className="px-6 pt-8 text-[#CBD5E1] text-[13px]">Cargando...</div>;
+    return <div className="px-6 pt-8 text-[#64748B] text-[13px]">Cargando...</div>;
   }
   if (!supplier) {
     return (
       <div className="px-6 pt-8">
-        <p className="text-[#94A3B8] text-[13px]">Proveedor no encontrado.</p>
+        <p className="text-[#475569] text-[13px]">Proveedor no encontrado.</p>
         <Link to="/suppliers" className="text-[#3B82F6] text-[13px] mt-2 inline-block">← Volver</Link>
       </div>
     );
@@ -258,7 +258,7 @@ const SuppliersDetail = () => {
     <div className="px-6 pt-8 pb-16 max-w-[900px] mx-auto">
 
       <div className="flex items-center gap-3 mb-8">
-        <Link to="/suppliers" className="text-[#94A3B8] hover:text-[#64748B] transition-colors text-[13px]">← Proveedores</Link>
+        <Link to="/suppliers" className="text-[#475569] hover:text-[#64748B] transition-colors text-[13px]">← Proveedores</Link>
         <span className="text-[#E2E8F0]">/</span>
         <span className="text-[13px] text-[#64748B]">{supplier.name}</span>
       </div>
@@ -266,7 +266,7 @@ const SuppliersDetail = () => {
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">{supplier.name}</h1>
-          <p className="text-[13px] text-[#94A3B8] mt-0.5">{supplier.city}</p>
+          <p className="text-[13px] text-[#475569] mt-0.5">{supplier.city}</p>
         </div>
         {canWrite && (
           <Link
@@ -287,13 +287,13 @@ const SuppliersDetail = () => {
           ['Items en inventario', supplier._count?.items ?? 0],
         ].map(([label, val]) => (
           <div key={label}>
-            <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-1">{label}</p>
+            <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.12em] mb-1">{label}</p>
             <p className="text-[13px] text-[#0F172A]">{val}</p>
           </div>
         ))}
         {supplier.notes && (
           <div className="col-span-2 sm:col-span-4 border-t border-[#E2E8F0] pt-3 mt-1">
-            <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-1">Notas</p>
+            <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.12em] mb-1">Notas</p>
             <p className="text-[13px] text-[#64748B]">{supplier.notes}</p>
           </div>
         )}
@@ -336,10 +336,10 @@ const SuppliersDetail = () => {
         <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white"
           style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
           {loadingOrders && (
-            <p className="text-center py-10 text-[#CBD5E1] text-[13px]">Cargando...</p>
+            <p className="text-center py-10 text-[#64748B] text-[13px]">Cargando...</p>
           )}
           {!loadingOrders && orders.length === 0 && (
-            <p className="text-center py-10 text-[#CBD5E1] text-[13px]">
+            <p className="text-center py-10 text-[#64748B] text-[13px]">
               Sin órdenes.{' '}
               {canWrite && (
                 <Link to={`/suppliers/${id}/orders/new`} className="text-[#3B82F6] hover:underline">
@@ -352,11 +352,11 @@ const SuppliersDetail = () => {
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-                  <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Fecha</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Items</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Notas</th>
-                  <th className="text-right px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Total</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Estado</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Fecha</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden sm:table-cell">Items</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Notas</th>
+                  <th className="text-right px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Total</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Estado</th>
                   {canWrite && <th className="px-4 py-3" />}
                 </tr>
               </thead>
@@ -367,19 +367,19 @@ const SuppliersDetail = () => {
                     <td className="px-4 py-3.5">
                       <p className="text-[#64748B]">{fmtDate(o.createdAt)}</p>
                       {o.receivedAt && (
-                        <p className="text-[11px] text-[#94A3B8]">Recibida {fmtDate(o.receivedAt)}</p>
+                        <p className="text-[11px] text-[#475569]">Recibida {fmtDate(o.receivedAt)}</p>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 text-[#94A3B8] hidden sm:table-cell">
+                    <td className="px-4 py-3.5 text-[#475569] hidden sm:table-cell">
                       {o._count?.items ?? o.items?.length ?? 0} ítem{(o._count?.items ?? 1) !== 1 ? 's' : ''}
                     </td>
-                    <td className="px-4 py-3.5 text-[#94A3B8] text-[12px] hidden md:table-cell max-w-[200px] truncate">
+                    <td className="px-4 py-3.5 text-[#475569] text-[12px] hidden md:table-cell max-w-[200px] truncate">
                       {o.notes ?? '—'}
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums">
                       <p className="text-[#0F172A] font-medium">{fmtByCurrency(o.total, o.currencyCode)}</p>
                       {o.paid > 0 && (
-                        <p className="text-[11px] text-[#94A3B8] mt-0.5">
+                        <p className="text-[11px] text-[#475569] mt-0.5">
                           {o.pending > 0
                             ? `${fmtByCurrency(o.paid, o.currencyCode)} pagado`
                             : 'Pagado completo'}
@@ -426,7 +426,7 @@ const SuppliersDetail = () => {
                                 </button>
                                 <button
                                   onClick={() => setConfirmCancel(null)}
-                                  className="text-[11px] text-[#94A3B8] hover:text-[#64748B] transition-colors"
+                                  className="text-[11px] text-[#475569] hover:text-[#64748B] transition-colors"
                                 >
                                   No
                                 </button>
@@ -434,7 +434,7 @@ const SuppliersDetail = () => {
                             ) : (
                               <button
                                 onClick={() => setConfirmCancel(o.id)}
-                                className="text-[11px] text-[#94A3B8] hover:text-[#64748B] transition-colors"
+                                className="text-[11px] text-[#475569] hover:text-[#64748B] transition-colors"
                               >
                                 Cancelar
                               </button>

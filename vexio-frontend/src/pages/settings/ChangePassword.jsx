@@ -43,17 +43,17 @@ const ChangePassword = () => {
   return (
     <div className="max-w-md mx-auto px-6 pt-12 pb-24">
       <div className="mb-8">
-        <Link to="/dashboard" className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors">
+        <Link to="/dashboard" className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors">
           ← Volver
         </Link>
         <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A] mt-4">Cambiar contraseña</h1>
-        <p className="text-[13px] text-[#94A3B8] mt-1">Actualizá tu contraseña de acceso.</p>
+        <p className="text-[13px] text-[#475569] mt-1">Actualizá tu contraseña de acceso.</p>
       </div>
 
       {success ? (
         <div className="border border-emerald-200 bg-emerald-50 rounded-xl px-5 py-4">
           <p className="text-[14px] text-emerald-600 font-medium">Contraseña actualizada correctamente.</p>
-          <p className="text-[12px] text-[#94A3B8] mt-1">Redirigiendo...</p>
+          <p className="text-[12px] text-[#475569] mt-1">Redirigiendo...</p>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">

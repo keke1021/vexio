@@ -1,6 +1,7 @@
 ﻿import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { X } from 'lucide-react';
 import api from '../../api/axios';
 
 const STATUS_CONFIG = {
@@ -10,7 +11,7 @@ const STATUS_CONFIG = {
 };
 
 const PRIORITY_CONFIG = {
-  BAJA:  { label: 'Baja',  cls: 'text-[#94A3B8]' },
+  BAJA:  { label: 'Baja',  cls: 'text-[#475569]' },
   MEDIA: { label: 'Media', cls: 'text-amber-600' },
   ALTA:  { label: 'Alta',  cls: 'text-red-500' },
 };
@@ -29,7 +30,7 @@ const fmtTime = (d) =>
 const BACKEND_URL = import.meta.env.VITE_API_URL?.replace('/api', '') ?? 'http://localhost:3001';
 
 const Badge = ({ config, value }) => {
-  const cfg = config[value] ?? { label: value, cls: 'text-[#94A3B8] bg-[#F1F5F9]' };
+  const cfg = config[value] ?? { label: value, cls: 'text-[#475569] bg-[#F1F5F9]' };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${cfg.cls}`}>
       {cfg.label}
@@ -83,7 +84,7 @@ const TicketPanel = ({ ticketId, onClose }) => {
   };
 
   if (!ticket) return (
-    <div className="flex items-center justify-center h-40 text-[#CBD5E1] text-[13px]">Cargando...</div>
+    <div className="flex items-center justify-center h-40 text-[#64748B] text-[13px]">Cargando...</div>
   );
 
   return (
@@ -91,14 +92,14 @@ const TicketPanel = ({ ticketId, onClose }) => {
       <div className="flex items-start justify-between px-5 py-4 border-b border-[#E2E8F0] dark:border-[#334155]">
         <div className="min-w-0 pr-4">
           <p className="text-[14px] font-semibold text-[#0F172A] dark:text-[#F1F5F9] leading-snug">{ticket.title}</p>
-          <p className="text-[11px] text-[#94A3B8] mt-0.5">{ticket.tenant?.name} · {CATEGORY_LABELS[ticket.category] ?? ticket.category}</p>
+          <p className="text-[11px] text-[#475569] mt-0.5">{ticket.tenant?.name} · {CATEGORY_LABELS[ticket.category] ?? ticket.category}</p>
         </div>
-        <button onClick={onClose} className="text-[#CBD5E1] hover:text-[#94A3B8] text-[18px] leading-none transition-colors shrink-0">×</button>
+        <button onClick={onClose} className="text-[#64748B] hover:text-[#475569] transition-colors shrink-0" aria-label="Cerrar"><X size={18} /></button>
       </div>
 
       <div className="flex items-center gap-2 px-5 py-3 border-b border-[#E2E8F0] dark:border-[#334155] bg-[#F8FAFC] dark:bg-[#0F172A]">
         <Badge config={STATUS_CONFIG} value={ticket.status} />
-        <span className={`text-[11px] font-medium ${PRIORITY_CONFIG[ticket.priority]?.cls ?? 'text-[#94A3B8]'}`}>
+        <span className={`text-[11px] font-medium ${PRIORITY_CONFIG[ticket.priority]?.cls ?? 'text-[#475569]'}`}>
           {PRIORITY_CONFIG[ticket.priority]?.label ?? ticket.priority}
         </span>
         {ticket.status !== 'RESUELTO' && (
@@ -127,7 +128,7 @@ const TicketPanel = ({ ticketId, onClose }) => {
         <div className="bg-[#F8FAFC] dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#334155] rounded-xl px-4 py-3">
           <div className="flex justify-between mb-1.5">
             <span className="text-[12px] font-medium text-[#64748B] dark:text-[#94A3B8]">{ticket.user?.name}</span>
-            <span className="text-[11px] text-[#CBD5E1] dark:text-[#475569]">{fmtTime(ticket.createdAt)}</span>
+            <span className="text-[11px] text-[#64748B] dark:text-[#475569]">{fmtTime(ticket.createdAt)}</span>
           </div>
           <p className="text-[13px] text-[#0F172A] dark:text-[#F1F5F9] whitespace-pre-wrap">{ticket.description}</p>
           {ticket.attachments?.length > 0 && (
@@ -158,7 +159,7 @@ const TicketPanel = ({ ticketId, onClose }) => {
                   <span className="text-[10px] font-medium text-[#3B82F6] bg-[#3B82F6]/10 px-1.5 py-0.5 rounded">Soporte</span>
                 )}
               </div>
-              <span className="text-[11px] text-[#CBD5E1] dark:text-[#475569]">{fmtTime(r.createdAt)}</span>
+              <span className="text-[11px] text-[#64748B] dark:text-[#475569]">{fmtTime(r.createdAt)}</span>
             </div>
             <p className="text-[13px] text-[#0F172A] dark:text-[#F1F5F9] whitespace-pre-wrap">{r.message}</p>
           </div>
@@ -188,14 +189,14 @@ const TicketPanel = ({ ticketId, onClose }) => {
                 setReplyFiles((p) => [...p, ...sel].slice(0, 3));
               }} />
               {replyFiles.length < 3 && (
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="text-[11px] text-[#94A3B8] hover:text-[#64748B] transition-colors">
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="text-[11px] text-[#475569] hover:text-[#64748B] transition-colors">
                   + Img
                 </button>
               )}
               {replyFiles.map((f, i) => (
                 <span key={i} className="text-[10px] text-[#64748B]">
                   {f.name.slice(0, 10)}…
-                  <button type="button" onClick={() => setReplyFiles((p) => p.filter((_, idx) => idx !== i))} className="ml-1 text-[#94A3B8] hover:text-red-400">×</button>
+                  <button type="button" onClick={() => setReplyFiles((p) => p.filter((_, idx) => idx !== i))} className="ml-1 inline-flex align-middle text-[#475569] hover:text-red-400" aria-label="Quitar"><X size={12} /></button>
                 </span>
               ))}
             </div>
@@ -241,7 +242,7 @@ const AdminTickets = () => {
       <div className={`flex flex-col ${selected ? 'w-1/2 border-r border-[#E2E8F0]' : 'w-full'} overflow-hidden`}>
         <div className="px-6 pt-8 pb-4 shrink-0">
           <div className="flex items-center gap-3 mb-6 text-[13px]">
-            <Link to="/admin" className="text-[#94A3B8] hover:text-[#64748B] transition-colors">← Tiendas</Link>
+            <Link to="/admin" className="text-[#475569] hover:text-[#64748B] transition-colors">← Tiendas</Link>
             <span className="text-[#E2E8F0]">/</span>
             <span className="text-[#64748B]">Tickets de soporte</span>
           </div>
@@ -270,9 +271,9 @@ const AdminTickets = () => {
 
         <div className="flex-1 overflow-y-auto px-6 pb-8 dark:bg-[#0F172A]">
           {isLoading ? (
-            <p className="text-[#CBD5E1] text-[13px]">Cargando...</p>
+            <p className="text-[#64748B] text-[13px]">Cargando...</p>
           ) : tickets.length === 0 ? (
-            <p className="text-[#CBD5E1] text-[13px] py-8 text-center">Sin tickets.</p>
+            <p className="text-[#64748B] text-[13px] py-8 text-center">Sin tickets.</p>
           ) : (
             <div className="space-y-2">
               {tickets.map((t) => (
@@ -289,19 +290,19 @@ const AdminTickets = () => {
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <p className="text-[13px] font-medium text-[#0F172A] dark:text-[#F1F5F9] truncate">{t.title}</p>
-                      <p className="text-[11px] text-[#94A3B8] dark:text-[#64748B] mt-0.5">
+                      <p className="text-[11px] text-[#475569] dark:text-[#64748B] mt-0.5">
                         {t.tenant?.name} · {CATEGORY_LABELS[t.category] ?? t.category}
                         {t._count?.replies > 0 && <span className="ml-1.5 text-violet-500">· {t._count.replies}r</span>}
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       <Badge config={STATUS_CONFIG} value={t.status} />
-                      <span className={`text-[10px] font-medium ${PRIORITY_CONFIG[t.priority]?.cls ?? 'text-[#94A3B8]'}`}>
+                      <span className={`text-[10px] font-medium ${PRIORITY_CONFIG[t.priority]?.cls ?? 'text-[#475569]'}`}>
                         {PRIORITY_CONFIG[t.priority]?.label}
                       </span>
                     </div>
                   </div>
-                  <p className="text-[11px] text-[#CBD5E1] dark:text-[#475569] mt-1.5">{fmtTime(t.createdAt)}</p>
+                  <p className="text-[11px] text-[#64748B] dark:text-[#475569] mt-1.5">{fmtTime(t.createdAt)}</p>
                 </button>
               ))}
             </div>

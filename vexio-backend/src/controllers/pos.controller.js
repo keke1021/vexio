@@ -5,6 +5,19 @@ const { findTenantTienda } = require('../utils/tienda');
 
 const prisma = new PrismaClient();
 
+// Se lanza DENTRO de la transacción de createSale cuando el update atómico
+// que marca los items SOLD afecta menos filas de las esperadas — significa
+// que, entre el chequeo optimista de arriba y este punto, otra venta
+// concurrente ya se quedó con alguno de los mismos equipos. Se captura en el
+// catch de createSale para responder 409 con un mensaje claro, en vez de
+// caer en el 500 genérico.
+class SaleConflictError extends Error {
+  constructor(imeis) {
+    super('SALE_CONFLICT');
+    this.imeis = imeis;
+  }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const PAYMENT_LABELS = {
@@ -54,6 +67,15 @@ const serializeInventoryItem = (item) => ({
  * Busca equipos DISPONIBLES por IMEI o nombre de modelo.
  * Optimizado para lectura desde lector de código de barras (IMEI exacto).
  */
+// Un IMEI real son sus 15 dígitos (o un tramo largo de dígitos consecutivos —
+// lector de código de barras, o alguien tipeando/pegando parte de uno de
+// memoria), o el placeholder que genera el sistema cuando no se cargó un
+// IMEI real (`VX-<timestamp>-<4 dígitos>`, ver inventory.controller.js
+// `create`/`bulkUpload`). Cualquier otra cosa — corta, con letras, o ambas
+// ("15", "iPhone 13", "funda") — es un modelo tipeado por el vendedor.
+const IMEI_PLACEHOLDER_RE = /^VX-\d+-\d{4}$/i;
+const looksLikeImei = (q) => IMEI_PLACEHOLDER_RE.test(q) || /\d{6,}/.test(q);
+
 const searchItem = async (req, res) => {
   try {
     const { tenantId } = req.user;
@@ -61,16 +83,26 @@ const searchItem = async (req, res) => {
 
     if (!q || q.trim().length < 2) return res.json({ items: [] });
 
+    const query = q.trim();
+
+    // Antes un solo OR buscaba el mismo string contra IMEI + nombre + color
+    // a la vez — "15" (buscando "iPhone 15") matcheaba `imei contains "15"`
+    // en casi cualquier equipo, porque el IMEI es una cadena de 15 dígitos y
+    // "15" aparece de casualidad en la mayoría. Ahora el query entra a un
+    // campo o al otro, nunca a los dos con el mismo substring corto.
+    const where = looksLikeImei(query)
+      ? { tenantId, status: 'AVAILABLE', imei: { contains: query, mode: 'insensitive' } }
+      : {
+          tenantId,
+          status: 'AVAILABLE',
+          OR: [
+            { product: { name:  { contains: query, mode: 'insensitive' } } },
+            { product: { color: { contains: query, mode: 'insensitive' } } },
+          ],
+        };
+
     const items = await prisma.inventoryItem.findMany({
-      where: {
-        tenantId,
-        status: 'AVAILABLE',
-        OR: [
-          { imei: { contains: q.trim(), mode: 'insensitive' } },
-          { product: { name: { contains: q.trim(), mode: 'insensitive' } } },
-          { product: { color: { contains: q.trim(), mode: 'insensitive' } } },
-        ],
-      },
+      where,
       include: {
         product: true,
         supplier: { select: { id: true, name: true } },
@@ -282,11 +314,27 @@ const createSale = async (req, res) => {
         },
       });
 
-      // Marcar todos los items como SOLD
-      await tx.inventoryItem.updateMany({
-        where: { id: { in: itemIds } },
+      // Marcar todos los items como SOLD — condicionado a que SIGAN
+      // AVAILABLE en este mismo instante. Esta es la guarda real contra la
+      // carrera (el chequeo `nonAvailable` de más arriba es solo un
+      // fast-path optimista, hecho antes de pedir cotización — no alcanza
+      // por sí solo porque corre fuera de la transacción). Un UPDATE con
+      // WHERE status='AVAILABLE' toma el lock de fila a nivel Postgres: si
+      // dos ventas concurrentes apuntan al mismo item, una gana (count=1)
+      // y la otra ve status ya cambiado a SOLD cuando su UPDATE se
+      // re-evalúa, así que su WHERE no matchea nada (count=0) — sin
+      // necesidad de un SELECT FOR UPDATE explícito.
+      const updateResult = await tx.inventoryItem.updateMany({
+        where: { id: { in: itemIds }, status: 'AVAILABLE' },
         data: { status: 'SOLD' },
       });
+      if (updateResult.count !== itemIds.length) {
+        const stillUnavailable = await tx.inventoryItem.findMany({
+          where: { id: { in: itemIds }, status: { not: 'AVAILABLE' } },
+          select: { imei: true },
+        });
+        throw new SaleConflictError(stillUnavailable.map((i) => i.imei));
+      }
 
       // Documento de caja — la caja abierta en esta sucursal es obligatoria
       // (se validó arriba), así que openSession siempre existe acá. No
@@ -329,6 +377,11 @@ const createSale = async (req, res) => {
 
     res.status(201).json(serializeSale(sale));
   } catch (error) {
+    if (error instanceof SaleConflictError) {
+      return res.status(409).json({
+        message: `Equipo ya vendido — alguien más se lo llevó justo antes: ${error.imeis.join(', ')}.`,
+      });
+    }
     console.error('[pos:createSale]', error);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }

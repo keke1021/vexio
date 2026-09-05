@@ -40,9 +40,9 @@ const todayStr = () => new Date().toISOString().split('T')[0];
 const SummaryCard = ({ label, value, sub }) => (
   <div className="border border-[#E2E8F0] rounded-xl p-4 bg-white"
     style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-    <p className="text-[11px] text-[#94A3B8] uppercase tracking-wider">{label}</p>
+    <p className="text-[11px] text-[#475569] uppercase tracking-wider">{label}</p>
     <p className="text-[22px] font-semibold mt-1 text-[#0F172A]">{value}</p>
-    {sub && <p className="text-[11px] text-[#94A3B8] mt-0.5">{sub}</p>}
+    {sub && <p className="text-[11px] text-[#475569] mt-0.5">{sub}</p>}
   </div>
 );
 
@@ -78,7 +78,7 @@ const PosSales = () => {
           <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">
             Historial de ventas {isToday && <span className="text-[#3B82F6] text-[16px] font-normal ml-2">— Hoy</span>}
           </h1>
-          <p className="text-[13px] text-[#94A3B8] mt-0.5">
+          <p className="text-[13px] text-[#475569] mt-0.5">
             {isLoading ? '...' : `${summary.salesCount ?? 0} venta${summary.salesCount !== 1 ? 's' : ''}`}
           </p>
         </div>
@@ -92,7 +92,7 @@ const PosSales = () => {
 
       <div className="flex flex-wrap gap-3 mb-6">
         <div className="flex items-center gap-2">
-          <span className="text-[12px] text-[#94A3B8]">Desde</span>
+          <span className="text-[12px] text-[#475569]">Desde</span>
           <input
             type="date"
             value={dateFrom}
@@ -102,7 +102,7 @@ const PosSales = () => {
           />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[12px] text-[#94A3B8]">Hasta</span>
+          <span className="text-[12px] text-[#475569]">Hasta</span>
           <input
             type="date"
             value={dateTo}
@@ -159,24 +159,24 @@ const PosSales = () => {
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Hora</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Vendedor</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Pago</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Cliente</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Items</th>
-              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Total</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Hora</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden sm:table-cell">Vendedor</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Pago</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Cliente</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Items</th>
+              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Total</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={6} className="text-center py-16 text-[#CBD5E1] text-[13px]">Cargando...</td></tr>
+              <tr><td colSpan={6} className="text-center py-16 text-[#64748B] text-[13px]">Cargando...</td></tr>
             )}
             {isError && (
               <tr><td colSpan={6} className="text-center py-16 text-red-400 text-[13px]">Error al cargar las ventas.</td></tr>
             )}
             {!isLoading && !isError && sales.length === 0 && (
               <tr>
-                <td colSpan={6} className="text-center py-16 text-[#CBD5E1] text-[13px]">
+                <td colSpan={6} className="text-center py-16 text-[#64748B] text-[13px]">
                   No hay ventas en el período seleccionado.
                 </td>
               </tr>
@@ -190,7 +190,7 @@ const PosSales = () => {
                 <td className="px-4 py-3.5">
                   <p className="text-[#64748B] font-mono text-[12px]">{formatTime(sale.createdAt)}</p>
                   {dateFrom !== dateTo && (
-                    <p className="text-[#94A3B8] text-[11px]">{formatDate(sale.createdAt)}</p>
+                    <p className="text-[#475569] text-[11px]">{formatDate(sale.createdAt)}</p>
                   )}
                 </td>
                 <td className="px-4 py-3.5 text-[#64748B] hidden sm:table-cell">{sale.seller?.name}</td>
@@ -199,10 +199,10 @@ const PosSales = () => {
                     {PAYMENT_LABELS[sale.paymentMethod]}
                   </span>
                 </td>
-                <td className="px-4 py-3.5 text-[#94A3B8] hidden md:table-cell">
+                <td className="px-4 py-3.5 text-[#475569] hidden md:table-cell">
                   {sale.customerName ?? '—'}
                 </td>
-                <td className="px-4 py-3.5 text-[#94A3B8] hidden md:table-cell">
+                <td className="px-4 py-3.5 text-[#475569] hidden md:table-cell">
                   {sale._count?.items ?? 0}
                 </td>
                 <td className="px-4 py-3.5 text-right font-medium text-[#0F172A]">

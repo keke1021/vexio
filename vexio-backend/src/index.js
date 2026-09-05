@@ -25,7 +25,26 @@ const PORT = process.env.PORT || 3001;
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 fs.mkdirSync(uploadsDir, { recursive: true });
 
-app.use(cors());
+// Orígenes permitidos: configurables por env var (coma-separado), con
+// fallback a los puertos de dev de Vite para no romper `npm run dev` si
+// ALLOWED_ORIGINS no está seteada. En producción, setear ALLOWED_ORIGINS
+// con el/los dominio(s) reales del frontend.
+const DEFAULT_DEV_ORIGINS = 'http://localhost:5173,http://localhost:3000';
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || DEFAULT_DEV_ORIGINS)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Sin header Origin (curl, health checks, requests server-to-server) se permite.
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    console.warn(`[CORS] Origen bloqueado: ${origin}`);
+    return callback(new Error('No permitido por CORS'));
+  },
+}));
 app.use(express.json());
 app.use('/uploads', express.static(uploadsDir));
 
@@ -54,16 +73,46 @@ const server = app.listen(PORT, () => {
   console.log(`Vexio Backend corriendo en http://localhost:${PORT}`);
 });
 
-const shutdown = async () => {
-  await prisma.$disconnect();
-  server.close(() => process.exit(0));
+// Shutdown controlado: deja de aceptar conexiones nuevas y da un margen para
+// que terminen los requests en vuelo antes de cerrar. Ante un unhandledRejection
+// asumimos que el estado del proceso puede estar comprometido (conexión de
+// Prisma en un estado raro, handle colgado, etc.) — no seguimos operando con
+// eso, salimos con código 1 y dejamos que el process manager del PaaS
+// (Railway/Render/PM2/etc.) reinicie el proceso. Con SIGINT/SIGTERM (deploy,
+// restart manual) el cierre es igual de prolijo pero con código 0.
+let isShuttingDown = false;
+
+const shutdown = (exitCode = 0) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  console.log(`Cerrando servidor (exit code ${exitCode})...`);
+
+  // Si algún request en vuelo (o una conexión keep-alive) no cierra sola,
+  // no nos quedamos colgados esperando: forzamos la salida igual.
+  const forceExitTimer = setTimeout(() => {
+    console.error('Timeout esperando conexiones en vuelo, forzando cierre.');
+    process.exit(exitCode);
+  }, 10_000);
+  forceExitTimer.unref();
+
+  server.close(async () => {
+    clearTimeout(forceExitTimer);
+    try {
+      await prisma.$disconnect();
+    } catch (disconnectError) {
+      console.error('Error desconectando Prisma durante el shutdown:', disconnectError);
+    }
+    process.exit(exitCode);
+  });
 };
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
-process.on('unhandledRejection', (err) => {
-  console.error('Unhandled rejection:', err);
-  shutdown();
+process.on('SIGINT', () => shutdown(0));
+process.on('SIGTERM', () => shutdown(0));
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection] Promesa no manejada, reiniciando el proceso:');
+  console.error(reason instanceof Error ? reason.stack : reason);
+  shutdown(1);
 });
 
 module.exports = app;

@@ -91,7 +91,7 @@ const ChartTooltip = ({ active, payload, label }) => {
         return (
           <p key={cur} className="text-[#0F172A] font-medium">
             <span style={{ color: CHART_COLORS[cur] }}>{cur}</span> {fmt(p.value)}
-            {count > 0 && <span className="text-[#94A3B8] font-normal"> · {count} venta{count !== 1 ? 's' : ''}</span>}
+            {count > 0 && <span className="text-[#475569] font-normal"> · {count} venta{count !== 1 ? 's' : ''}</span>}
           </p>
         );
       })}
@@ -107,14 +107,14 @@ const SectionTitle = ({ children }) => (
 
 const StatCard = ({ label, value, sub, accent }) => (
   <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-    <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.15em] mb-2">{label}</p>
+    <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.15em] mb-2">{label}</p>
     <p className={`text-[22px] font-semibold tracking-tight ${accent ?? 'text-[#0F172A]'}`}>{value}</p>
-    {sub && <p className="text-[11px] text-[#CBD5E1] mt-1">{sub}</p>}
+    {sub && <p className="text-[11px] text-[#64748B] mt-1">{sub}</p>}
   </div>
 );
 
 const LoadingRow = () => (
-  <p className="text-[13px] text-[#CBD5E1] py-6">Cargando...</p>
+  <p className="text-[13px] text-[#64748B] py-6">Cargando...</p>
 );
 
 // ─── Excel Export ─────────────────────────────────────────────────────────────
@@ -299,7 +299,7 @@ const ReportsPage = () => {
               className="bg-white border border-[#E2E8F0] rounded-lg px-3 py-1.5 text-[12px] text-[#0F172A]
                 focus:outline-none focus:border-[#3B82F6] transition-all"
             />
-            <span className="text-[#CBD5E1] text-[12px]">al</span>
+            <span className="text-[#64748B] text-[12px]">al</span>
             <input
               type="date"
               value={customTo}
@@ -310,12 +310,12 @@ const ReportsPage = () => {
           </div>
         )}
         {dates && (
-          <span className="text-[11px] text-[#CBD5E1] ml-1">{periodLabel}</span>
+          <span className="text-[11px] text-[#64748B] ml-1">{periodLabel}</span>
         )}
       </div>
 
       {!dates && (
-        <p className="text-[#94A3B8] text-[13px] mb-8">Seleccioná un período personalizado para ver los datos.</p>
+        <p className="text-[#475569] text-[13px] mb-8">Seleccioná un período personalizado para ver los datos.</p>
       )}
 
       {/* ── Ventas ──────────────────────────────────────────────────────────── */}
@@ -333,7 +333,7 @@ const ReportsPage = () => {
 
             {dailyData.length > 1 && (
               <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 mb-5" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-                <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-4">
+                <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.12em] mb-4">
                   Ventas por día
                 </p>
                 <ResponsiveContainer width="100%" height={180}>
@@ -342,14 +342,14 @@ const ReportsPage = () => {
                     <XAxis
                       dataKey="date"
                       tickFormatter={fmtDate}
-                      tick={{ fill: '#94A3B8', fontSize: 10 }}
+                      tick={{ fill: '#475569', fontSize: 10 }}
                       axisLine={false}
                       tickLine={false}
                       interval="preserveStartEnd"
                     />
                     <YAxis
                       tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)}
-                      tick={{ fill: '#94A3B8', fontSize: 10 }}
+                      tick={{ fill: '#475569', fontSize: 10 }}
                       axisLine={false}
                       tickLine={false}
                     />
@@ -364,16 +364,16 @@ const ReportsPage = () => {
 
             {Object.keys(salesQ.data.byPaymentMethod).length > 0 && (
               <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-                <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-3">
+                <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.12em] mb-3">
                   Por medio de pago
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {Object.entries(salesQ.data.byPaymentMethod).flatMap(([pm, byCur]) =>
                     Object.entries(byCur).map(([cur, v]) => (
                       <div key={`${pm}-${cur}`}>
-                        <p className="text-[11px] text-[#94A3B8] mb-1">{PAYMENT_LABELS[pm] ?? pm} · {cur}</p>
+                        <p className="text-[11px] text-[#475569] mb-1">{PAYMENT_LABELS[pm] ?? pm} · {cur}</p>
                         <p className="text-[16px] font-bold text-[#0F172A]">{cur === 'ARS' ? fmt(v.total) : fmtUSD(v.total)}</p>
-                        <p className="text-[11px] text-[#CBD5E1]">{v.count} venta{v.count !== 1 ? 's' : ''}</p>
+                        <p className="text-[11px] text-[#64748B]">{v.count} venta{v.count !== 1 ? 's' : ''}</p>
                       </div>
                     ))
                   )}
@@ -383,16 +383,16 @@ const ReportsPage = () => {
 
             {salesQ.data.byCurrency && Object.keys(salesQ.data.byCurrency).length > 0 && (
               <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4 mt-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-                <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-3">Por moneda</p>
+                <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.12em] mb-3">Por moneda</p>
                 <div className="flex flex-wrap gap-5">
                   {CURRENCIES.map((cur) => {
                     const v = salesQ.data.byCurrency[cur];
                     if (!v) return null;
                     return (
                       <div key={cur}>
-                        <p className="text-[11px] font-bold text-[#94A3B8] mb-1">{cur}</p>
+                        <p className="text-[11px] font-bold text-[#475569] mb-1">{cur}</p>
                         <p className="text-[16px] font-bold text-[#0F172A]">{cur === 'ARS' ? fmt(v.total) : fmtUSD(v.total)}</p>
-                        <p className="text-[11px] text-[#CBD5E1]">{v.count} venta{v.count !== 1 ? 's' : ''} · ticket prom. {cur === 'ARS' ? fmt(v.avgTicket) : fmtUSD(v.avgTicket)}</p>
+                        <p className="text-[11px] text-[#64748B]">{v.count} venta{v.count !== 1 ? 's' : ''} · ticket prom. {cur === 'ARS' ? fmt(v.avgTicket) : fmtUSD(v.avgTicket)}</p>
                       </div>
                     );
                   })}
@@ -401,7 +401,7 @@ const ReportsPage = () => {
             )}
 
             {salesQ.data.count === 0 && (
-              <p className="text-[13px] text-[#CBD5E1]">Sin ventas en el período seleccionado.</p>
+              <p className="text-[13px] text-[#64748B]">Sin ventas en el período seleccionado.</p>
             )}
           </>
         )}
@@ -415,7 +415,7 @@ const ReportsPage = () => {
         {!productsQ.isLoading && productsQ.data && (
           <>
             {productsQ.data.topProducts.length === 0 ? (
-              <p className="text-[13px] text-[#CBD5E1]">Sin datos de ventas en el período.</p>
+              <p className="text-[13px] text-[#64748B]">Sin datos de ventas en el período.</p>
             ) : (
               <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
                 <table className="w-full text-[13px]">
@@ -432,7 +432,7 @@ const ReportsPage = () => {
                   <tbody>
                     {productsQ.data.topProducts.map((p, idx) => (
                       <tr key={p.productId} className="border-b border-[#E2E8F0] hover:bg-[#EFF6FF]">
-                        <td className="px-4 py-3 text-[#CBD5E1] text-[11px] font-mono">{idx + 1}</td>
+                        <td className="px-4 py-3 text-[#64748B] text-[11px] font-mono">{idx + 1}</td>
                         <td className="px-4 py-3 text-[#374151]">{p.name}</td>
                         <td className="px-4 py-3 text-right text-[#0F172A] font-medium">{p.soldCount}</td>
                         <td className="px-4 py-3 text-right text-[#64748B] hidden sm:table-cell">{fmt(p.revenue)}</td>
@@ -463,13 +463,13 @@ const ReportsPage = () => {
               <StatCard label="Equipos disponibles" value={inventoryQ.data.totalItems} />
 
               <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-                <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.15em] mb-3">Valor de costo</p>
+                <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.15em] mb-3">Valor de costo</p>
                 {['ARS', 'USD', 'USDT'].map((cur) => {
                   const v = inventoryQ.data.byCurrency?.[cur];
                   if (!v) return null;
                   return (
                     <div key={cur} className="mb-2 last:mb-0">
-                      <p className="text-[10px] text-[#CBD5E1] mb-0.5">{cur}</p>
+                      <p className="text-[10px] text-[#64748B] mb-0.5">{cur}</p>
                       <p className="text-[18px] font-semibold tracking-tight text-[#0F172A]">
                         {cur === 'ARS' ? fmt(v.costValue) : fmtUSD(v.costValue)}
                       </p>
@@ -479,13 +479,13 @@ const ReportsPage = () => {
               </div>
 
               <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-                <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.15em] mb-3">Valor de venta</p>
+                <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.15em] mb-3">Valor de venta</p>
                 {['ARS', 'USD', 'USDT'].map((cur) => {
                   const v = inventoryQ.data.byCurrency?.[cur];
                   if (!v) return null;
                   return (
                     <div key={cur} className="mb-2 last:mb-0">
-                      <p className="text-[10px] text-[#CBD5E1] mb-0.5">{cur}</p>
+                      <p className="text-[10px] text-[#64748B] mb-0.5">{cur}</p>
                       <p className="text-[18px] font-semibold tracking-tight text-[#3B82F6]">
                         {cur === 'ARS' ? fmt(v.saleValue) : fmtUSD(v.saleValue)}
                       </p>
@@ -497,13 +497,13 @@ const ReportsPage = () => {
 
             {inventoryQ.data.byCondition.length > 0 && (
               <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4 mb-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-                <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-3">Por condición</p>
+                <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.12em] mb-3">Por condición</p>
                 <div className="flex flex-wrap gap-5">
                   {inventoryQ.data.byCondition.map((c) => (
                     <div key={c.condition}>
-                      <p className="text-[11px] text-[#94A3B8] mb-0.5">{CONDITION_LABELS[c.condition] ?? c.condition}</p>
+                      <p className="text-[11px] text-[#475569] mb-0.5">{CONDITION_LABELS[c.condition] ?? c.condition}</p>
                       <p className="text-[16px] font-bold text-[#0F172A]">{c.count}</p>
-                      <p className="text-[11px] text-[#CBD5E1]">{fmt(c.costValue)}</p>
+                      <p className="text-[11px] text-[#64748B]">{fmt(c.costValue)}</p>
                     </div>
                   ))}
                 </div>
@@ -550,13 +550,13 @@ const ReportsPage = () => {
 
             {Object.keys(repairsQ.data.byStatus).length > 0 && (
               <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-                <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-3">Por estado</p>
+                <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.12em] mb-3">Por estado</p>
                 <div className="flex flex-wrap gap-5">
                   {Object.entries(repairsQ.data.byStatus).map(([status, v]) => (
                     <div key={status}>
-                      <p className="text-[11px] text-[#94A3B8] mb-0.5">{REPAIR_LABELS[status] ?? status}</p>
+                      <p className="text-[11px] text-[#475569] mb-0.5">{REPAIR_LABELS[status] ?? status}</p>
                       <p className="text-[16px] font-bold text-[#0F172A]">{v.count}</p>
-                      {v.total > 0 && <p className="text-[11px] text-[#CBD5E1]">{fmt(v.total)}</p>}
+                      {v.total > 0 && <p className="text-[11px] text-[#64748B]">{fmt(v.total)}</p>}
                     </div>
                   ))}
                 </div>
@@ -581,7 +581,7 @@ const ReportsPage = () => {
                 const f = cur === 'ARS' ? fmt : fmtUSD;
                 return (
                   <div key={cur}>
-                    <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-widest mb-2">{cur}</p>
+                    <p className="text-[10px] font-medium text-[#475569] uppercase tracking-widest mb-2">{cur}</p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <StatCard label="Ingresos"   value={f(v.income)}     accent="text-emerald-600" />
                       <StatCard label="Egresos"    value={f(v.expense)}    accent="text-red-500" />
@@ -591,18 +591,18 @@ const ReportsPage = () => {
                 );
               })}
               {Object.keys(cashQ.data.byCurrency ?? {}).length === 0 && (
-                <p className="text-[13px] text-[#CBD5E1]">Sin movimientos de caja en el período seleccionado.</p>
+                <p className="text-[13px] text-[#64748B]">Sin movimientos de caja en el período seleccionado.</p>
               )}
             </div>
 
             {Object.keys(cashQ.data.byPaymentMethod).length > 0 && (
               <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-                <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-3">Por medio de pago</p>
+                <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.12em] mb-3">Por medio de pago</p>
                 <div className="flex flex-wrap gap-5">
                   {Object.entries(cashQ.data.byPaymentMethod).flatMap(([pm, byCur]) =>
                     Object.entries(byCur).map(([cur, v]) => (
                       <div key={`${pm}-${cur}`}>
-                        <p className="text-[11px] text-[#94A3B8] mb-0.5">{PAYMENT_LABELS[pm] ?? pm} · {cur}</p>
+                        <p className="text-[11px] text-[#475569] mb-0.5">{PAYMENT_LABELS[pm] ?? pm} · {cur}</p>
                         <p className="text-[13px] font-medium text-emerald-600">+{cur === 'ARS' ? fmt(v.income) : fmtUSD(v.income)}</p>
                         {v.expense > 0 && <p className="text-[12px] text-red-500">−{cur === 'ARS' ? fmt(v.expense) : fmtUSD(v.expense)}</p>}
                       </div>

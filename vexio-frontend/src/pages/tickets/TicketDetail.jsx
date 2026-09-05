@@ -1,6 +1,7 @@
 ﻿import { useRef, useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api, { tokenStore } from '../../api/axios';
 
@@ -11,7 +12,7 @@ const STATUS_CONFIG = {
 };
 
 const PRIORITY_CONFIG = {
-  BAJA:  { label: 'Baja',  cls: 'text-[#94A3B8]' },
+  BAJA:  { label: 'Baja',  cls: 'text-[#475569]' },
   MEDIA: { label: 'Media', cls: 'text-amber-600' },
   ALTA:  { label: 'Alta',  cls: 'text-red-500' },
 };
@@ -94,16 +95,16 @@ const TicketDetail = () => {
     replyMutation.mutate(fd);
   };
 
-  if (isLoading) return <div className="px-6 pt-8 text-[#CBD5E1] text-[13px]">Cargando...</div>;
+  if (isLoading) return <div className="px-6 pt-8 text-[#64748B] text-[13px]">Cargando...</div>;
   if (!ticket) return (
     <div className="px-6 pt-8">
-      <p className="text-[#94A3B8] text-[13px]">Ticket no encontrado.</p>
+      <p className="text-[#475569] text-[13px]">Ticket no encontrado.</p>
       <Link to="/tickets" className="text-[#3B82F6] text-[13px] mt-2 inline-block">← Volver</Link>
     </div>
   );
 
-  const statusCfg   = STATUS_CONFIG[ticket.status]    ?? { label: ticket.status, cls: 'text-[#94A3B8] bg-[#F1F5F9]' };
-  const priorityCfg = PRIORITY_CONFIG[ticket.priority] ?? { label: ticket.priority, cls: 'text-[#94A3B8]' };
+  const statusCfg   = STATUS_CONFIG[ticket.status]    ?? { label: ticket.status, cls: 'text-[#475569] bg-[#F1F5F9]' };
+  const priorityCfg = PRIORITY_CONFIG[ticket.priority] ?? { label: ticket.priority, cls: 'text-[#475569]' };
   const isSuperAdmin = user?.role === 'SUPERADMIN';
   const canReply     = ticket.status !== 'RESUELTO';
 
@@ -111,7 +112,7 @@ const TicketDetail = () => {
     <div className="max-w-[760px] mx-auto px-6 pt-8 pb-24">
 
       <div className="flex items-center gap-2 mb-8 text-[13px]">
-        <Link to="/tickets" className="text-[#94A3B8] hover:text-[#64748B] transition-colors">← Soporte</Link>
+        <Link to="/tickets" className="text-[#475569] hover:text-[#64748B] transition-colors">← Soporte</Link>
         <span className="text-[#E2E8F0]">/</span>
         <span className="text-[#64748B] truncate">{ticket.title}</span>
       </div>
@@ -124,7 +125,7 @@ const TicketDetail = () => {
             {statusCfg.label}
           </span>
         </div>
-        <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-[#94A3B8]">
+        <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-[#475569]">
           <span>{CATEGORY_LABELS[ticket.category] ?? ticket.category}</span>
           <span className={priorityCfg.cls}>Prioridad {priorityCfg.label}</span>
           {isSuperAdmin && ticket.tenant && (
@@ -135,7 +136,7 @@ const TicketDetail = () => {
 
         {ticket.status !== 'RESUELTO' && isSuperAdmin && (
           <div className="flex items-center gap-2 mt-4 pt-4 border-t border-[#E2E8F0]">
-            <span className="text-[11px] text-[#94A3B8] uppercase tracking-widest">Estado</span>
+            <span className="text-[11px] text-[#475569] uppercase tracking-widest">Estado</span>
             {ticket.status === 'ABIERTO' && (
               <button
                 onClick={() => statusMutation.mutate('EN_PROCESO')}
@@ -160,7 +161,7 @@ const TicketDetail = () => {
         <div className="bg-[#F8FAFC] dark:bg-[#0F172A] border border-[#E2E8F0] dark:border-[#334155] rounded-xl px-5 py-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[12px] font-medium text-[#64748B] dark:text-[#94A3B8]">{ticket.user?.name ?? 'Usuario'}</span>
-            <span className="text-[11px] text-[#CBD5E1] dark:text-[#475569]">{fmtTime(ticket.createdAt)}</span>
+            <span className="text-[11px] text-[#64748B] dark:text-[#475569]">{fmtTime(ticket.createdAt)}</span>
           </div>
           <p className="text-[13px] text-[#0F172A] dark:text-[#F1F5F9] whitespace-pre-wrap">{ticket.description}</p>
           {ticket.attachments?.length > 0 && (
@@ -193,7 +194,7 @@ const TicketDetail = () => {
                   </span>
                 )}
               </div>
-              <span className="text-[11px] text-[#CBD5E1] dark:text-[#475569]">{fmtTime(r.createdAt)}</span>
+              <span className="text-[11px] text-[#64748B] dark:text-[#475569]">{fmtTime(r.createdAt)}</span>
             </div>
             <p className="text-[13px] text-[#0F172A] dark:text-[#F1F5F9] whitespace-pre-wrap">{r.message}</p>
             {r.attachments?.length > 0 && (
@@ -234,7 +235,7 @@ const TicketDetail = () => {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="text-[11px] text-[#94A3B8] hover:text-[#64748B] transition-colors"
+                  className="text-[11px] text-[#475569] hover:text-[#64748B] transition-colors"
                 >
                   + Adjuntar imagen
                 </button>
@@ -242,7 +243,7 @@ const TicketDetail = () => {
               {replyFiles.map((f, i) => (
                 <span key={i} className="text-[11px] text-[#64748B] bg-[#F8FAFC] border border-[#E2E8F0] px-2 py-0.5 rounded flex items-center gap-1">
                   {f.name.slice(0, 15)}…
-                  <button type="button" onClick={() => setReplyFiles((p) => p.filter((_, idx) => idx !== i))} className="text-[#94A3B8] hover:text-red-400">×</button>
+                  <button type="button" onClick={() => setReplyFiles((p) => p.filter((_, idx) => idx !== i))} className="inline-flex align-middle text-[#475569] hover:text-red-400" aria-label="Quitar"><X size={12} /></button>
                 </span>
               ))}
             </div>

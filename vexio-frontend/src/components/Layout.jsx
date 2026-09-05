@@ -103,7 +103,7 @@ const NotificationBell = () => {
 
           <div className="max-h-80 overflow-y-auto">
             {notifications.length === 0 ? (
-              <p className="text-center py-8 text-[12px] text-[#CBD5E1]">Sin notificaciones nuevas</p>
+              <p className="text-center py-8 text-[12px] text-[#64748B]">Sin notificaciones nuevas</p>
             ) : (
               notifications.map((n) => (
                 <button
@@ -114,7 +114,7 @@ const NotificationBell = () => {
                   <p className={`text-[12px] font-medium ${TYPE_COLORS[n.type] ?? 'text-[#64748B]'}`}>
                     {n.message}
                   </p>
-                  <p className="text-[10px] text-[#CBD5E1] mt-0.5">{fmtTime(n.createdAt)}</p>
+                  <p className="text-[10px] text-[#64748B] mt-0.5">{fmtTime(n.createdAt)}</p>
                 </button>
               ))
             )}

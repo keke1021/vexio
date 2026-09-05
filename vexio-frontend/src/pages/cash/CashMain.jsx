@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { X } from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import CashSessionsTable from './CashSessionsTable';
@@ -40,7 +41,7 @@ const CURRENCY_BADGE_CLS = {
 const StatCard = ({ label, value, accent }) => (
   <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4"
     style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-    <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.15em] mb-2">{label}</p>
+    <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.15em] mb-2">{label}</p>
     <p className={`text-[22px] font-semibold tracking-tight ${accent ?? 'text-[#0F172A]'}`}>{value}</p>
   </div>
 );
@@ -53,16 +54,16 @@ const BalanceCard = ({ currencyCode, data }) => {
   return (
     <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4"
       style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-      <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.15em] mb-3">
+      <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.15em] mb-3">
         Balance {currencyCode}
       </p>
       <div className="space-y-1.5">
         <div className="flex justify-between text-[13px]">
-          <span className="text-[#94A3B8]">Ingresos</span>
+          <span className="text-[#475569]">Ingresos</span>
           <span className="text-emerald-600 font-medium">{fmtByCurrency(income, currencyCode)}</span>
         </div>
         <div className="flex justify-between text-[13px]">
-          <span className="text-[#94A3B8]">Egresos</span>
+          <span className="text-[#475569]">Egresos</span>
           <span className="text-red-500 font-medium">{fmtByCurrency(expense, currencyCode)}</span>
         </div>
         <div className="border-t border-[#E2E8F0] pt-1.5 flex justify-between text-[13px]">
@@ -95,12 +96,12 @@ const SaleDetailModal = ({ saleId, onClose }) => {
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#E2E8F0]">
           <p className="text-[11px] text-[#3B82F6] uppercase tracking-widest font-medium">Detalle de venta</p>
-          <button onClick={onClose} className="text-[#94A3B8] hover:text-[#64748B] text-xl leading-none">×</button>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#64748B] transition-colors" aria-label="Cerrar"><X size={20} /></button>
         </div>
 
         <div className="px-5 py-4">
           {isLoading && (
-            <p className="text-center text-[13px] text-[#CBD5E1] py-6">Cargando...</p>
+            <p className="text-center text-[13px] text-[#64748B] py-6">Cargando...</p>
           )}
 
           {sale && (
@@ -113,7 +114,7 @@ const SaleDetailModal = ({ saleId, onClose }) => {
                         .filter(Boolean).join(' ')}
                     </p>
                     {si.inventoryItem?.imei && (
-                      <p className="text-[11px] text-[#94A3B8] mt-0.5 font-mono">IMEI: {si.inventoryItem.imei}</p>
+                      <p className="text-[11px] text-[#475569] mt-0.5 font-mono">IMEI: {si.inventoryItem.imei}</p>
                     )}
                     <p className="text-[13px] font-semibold mt-1.5 text-[#0F172A]">
                       {fmtByCurrency(si.salePrice, sale.currencyCode)}
@@ -124,23 +125,23 @@ const SaleDetailModal = ({ saleId, onClose }) => {
 
               <div className="space-y-2 text-[13px] border-t border-[#E2E8F0] pt-3">
                 <div className="flex justify-between">
-                  <span className="text-[#94A3B8]">Total</span>
+                  <span className="text-[#475569]">Total</span>
                   <span className="font-medium text-[#0F172A]">
                     {fmtByCurrency(sale.total, sale.currencyCode)}
-                    <span className="text-[#CBD5E1] mx-1">·</span>
+                    <span className="text-[#64748B] mx-1">·</span>
                     <span className="text-[#64748B]">{PAYMENT_LABELS[sale.paymentMethod] ?? sale.paymentMethod}</span>
                   </span>
                 </div>
                 {sale.customerName && (
                   <div className="flex justify-between">
-                    <span className="text-[#94A3B8]">Cliente</span>
+                    <span className="text-[#475569]">Cliente</span>
                     <span className="text-[#0F172A]">
                       {sale.customerName}{sale.customerPhone ? ` · ${sale.customerPhone}` : ''}
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span className="text-[#94A3B8]">Vendedor</span>
+                  <span className="text-[#475569]">Vendedor</span>
                   <span className="text-[#0F172A]">{sale.seller?.name ?? '—'}</span>
                 </div>
               </div>
@@ -162,11 +163,11 @@ const SessionSummaryCard = ({ session }) => (
       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
       Caja abierta
     </span>
-    <p className="text-[13px] text-[#94A3B8] mb-1">Abierta desde las {fmtTime(session.openedAt)}</p>
+    <p className="text-[13px] text-[#475569] mb-1">Abierta desde las {fmtTime(session.openedAt)}</p>
     <p className="text-[18px] font-semibold text-[#0F172A] leading-tight">
       {session.openedBy?.name ?? '—'}
     </p>
-    <p className="text-[11px] text-[#94A3B8] mt-0.5">abrió esta caja</p>
+    <p className="text-[11px] text-[#475569] mt-0.5">abrió esta caja</p>
   </div>
 );
 
@@ -236,7 +237,7 @@ const ClosePanel = ({ byCurrency, onClose, isPending, onCancel }) => {
 
       <div className="space-y-4 mb-5">
         {activeCurrencies.length === 0 && (
-          <p className="text-[13px] text-[#94A3B8]">Sin movimientos en esta sesión.</p>
+          <p className="text-[13px] text-[#475569]">Sin movimientos en esta sesión.</p>
         )}
         {activeCurrencies.map((cur) => {
           const b = byCurrency[cur];
@@ -246,7 +247,7 @@ const ClosePanel = ({ byCurrency, onClose, isPending, onCancel }) => {
                 <span className="text-[12px] font-bold text-[#0F172A]">{cur}</span>
                 <span className="text-[12px] text-[#64748B]">Calculado: {fmtByCurrency(b.balance, cur)}</span>
               </div>
-              <label className="block text-[11px] text-[#94A3B8] mb-1">Monto contado (opcional)</label>
+              <label className="block text-[11px] text-[#475569] mb-1">Monto contado (opcional)</label>
               <input
                 type="number"
                 placeholder={b.balance.toFixed(2)}
@@ -289,7 +290,7 @@ const ClosePanel = ({ byCurrency, onClose, isPending, onCancel }) => {
         >
           {isPending ? 'Cerrando...' : 'Confirmar cierre'}
         </button>
-        <button onClick={onCancel} className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors">
+        <button onClick={onCancel} className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors">
           Cancelar
         </button>
       </div>
@@ -378,7 +379,7 @@ const CashMain = () => {
           <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Caja</h1>
           {tiendas.length > 1 && (
             <div className="mt-1.5">
-              <label className="text-[10px] text-[#94A3B8] uppercase tracking-[0.12em] mr-2">Sucursal</label>
+              <label className="text-[10px] text-[#475569] uppercase tracking-[0.12em] mr-2">Sucursal</label>
               <select
                 value={tiendaId}
                 onChange={(e) => setSearchParams({ tiendaId: e.target.value })}
@@ -393,7 +394,7 @@ const CashMain = () => {
             </div>
           )}
           {session && !isOpen && (
-            <p className="text-[13px] text-[#94A3B8] mt-0.5">
+            <p className="text-[13px] text-[#475569] mt-0.5">
               {`Cerrada el ${fmtDate(session.closedAt)} a las ${fmtTime(session.closedAt)}`}
             </p>
           )}
@@ -407,7 +408,7 @@ const CashMain = () => {
             </span>
           )}
           {!isOpen && session && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-[#F1F5F9] text-[#94A3B8] border border-[#E2E8F0] text-[11px] font-medium">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0] text-[11px] font-medium">
               Cerrada
             </span>
           )}
@@ -429,12 +430,12 @@ const CashMain = () => {
       )}
 
       {tiendas.length > 1 && !tiendaId && (
-        <p className="text-[13px] text-[#94A3B8]">Elegí una sucursal arriba para ver su caja.</p>
+        <p className="text-[13px] text-[#475569]">Elegí una sucursal arriba para ver su caja.</p>
       )}
 
       {tiendaId && (
         <>
-          {loadingSummary && <p className="text-[#CBD5E1] text-[13px]">Cargando...</p>}
+          {loadingSummary && <p className="text-[#64748B] text-[13px]">Cargando...</p>}
 
           {error && <p className="text-[13px] text-red-500 mb-5">{error}</p>}
 
@@ -444,7 +445,7 @@ const CashMain = () => {
             </div>
           )}
           {!loadingSummary && !session && !canManage && (
-            <p className="text-[#94A3B8] text-[13px] text-center">No hay caja abierta hoy.</p>
+            <p className="text-[#475569] text-[13px] text-center">No hay caja abierta hoy.</p>
           )}
 
       {!loadingSummary && session && isOpen && !showClose && (
@@ -477,7 +478,7 @@ const CashMain = () => {
               const d = byCurrency[cur];
               return (
                 <div key={cur}>
-                  <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-widest mb-2">{cur}</p>
+                  <p className="text-[10px] font-medium text-[#475569] uppercase tracking-widest mb-2">{cur}</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <StatCard label="Monto inicial"    value={fmtByCurrency(d.openingBalance, cur)} />
                     <StatCard label="Ventas"           value={fmtByCurrency(d.salesIncome, cur)}  accent="text-[#3B82F6]" />
@@ -492,12 +493,12 @@ const CashMain = () => {
           {Object.keys(byPayment).length > 0 && (
             <div className="bg-white border border-[#E2E8F0] rounded-xl px-5 py-4 mb-6"
               style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-              <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.15em] mb-3">Por medio de pago</p>
+              <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.15em] mb-3">Por medio de pago</p>
               <div className="flex flex-wrap gap-x-6 gap-y-2">
                 {Object.entries(byPayment).map(([pm, byCur]) =>
                   Object.entries(byCur).map(([cur, vals]) => (
                     <div key={`${pm}-${cur}`} className="flex items-baseline gap-2">
-                      <span className="text-[11px] text-[#94A3B8]">{PAYMENT_LABELS[pm] ?? pm} · {cur}</span>
+                      <span className="text-[11px] text-[#475569]">{PAYMENT_LABELS[pm] ?? pm} · {cur}</span>
                       <span className="text-[13px] text-[#0F172A] font-medium">{fmtByCurrency(vals.income, cur)}</span>
                       {vals.expense > 0 && (
                         <span className="text-[11px] text-red-500">−{fmtByCurrency(vals.expense, cur)}</span>
@@ -521,7 +522,7 @@ const CashMain = () => {
               {canManage && isOpen && (
                 <Link
                   to={`/cash/movements/new?tiendaId=${tiendaId}`}
-                  className="text-[12px] text-[#94A3B8] hover:text-[#64748B] transition-colors"
+                  className="text-[12px] text-[#475569] hover:text-[#64748B] transition-colors"
                 >
                   + Nuevo
                 </Link>
@@ -531,22 +532,22 @@ const CashMain = () => {
             <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white"
               style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
               {loadingMov && (
-                <p className="text-center py-10 text-[#CBD5E1] text-[13px]">Cargando...</p>
+                <p className="text-center py-10 text-[#64748B] text-[13px]">Cargando...</p>
               )}
               {!loadingMov && movements.length === 0 && (
-                <p className="text-center py-10 text-[#CBD5E1] text-[13px]">Sin movimientos aún.</p>
+                <p className="text-center py-10 text-[#64748B] text-[13px]">Sin movimientos aún.</p>
               )}
               {!loadingMov && movements.length > 0 && (
                 <table className="w-full text-[13px]">
                   <thead>
                     <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-                      <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Tipo</th>
-                      <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Descripción</th>
-                      <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Medio</th>
-                      <th className="text-right px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Monto</th>
-                      <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Moneda</th>
-                      <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Hora</th>
-                      <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Usuario</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Tipo</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Descripción</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden sm:table-cell">Medio</th>
+                      <th className="text-right px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Monto</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Moneda</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Hora</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden lg:table-cell">Usuario</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -563,12 +564,12 @@ const CashMain = () => {
                             <span>{m.type === 'INCOME' ? '+' : '−'}</span>
                             <span>{m.type === 'INCOME' ? 'Ingreso' : 'Egreso'}</span>
                             {m.sale && (
-                              <span className="text-[#CBD5E1] font-normal">venta</span>
+                              <span className="text-[#64748B] font-normal">venta</span>
                             )}
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-[#64748B]">{m.description}</td>
-                        <td className="px-4 py-3.5 text-[#94A3B8] hidden sm:table-cell">
+                        <td className="px-4 py-3.5 text-[#475569] hidden sm:table-cell">
                           {PAYMENT_LABELS[m.paymentMethod] ?? m.paymentMethod}
                         </td>
                         <td className={`px-4 py-3.5 text-right font-medium tabular-nums ${
@@ -586,10 +587,10 @@ const CashMain = () => {
                             );
                           })()}
                         </td>
-                        <td className="px-4 py-3.5 text-[#94A3B8] hidden md:table-cell">
+                        <td className="px-4 py-3.5 text-[#475569] hidden md:table-cell">
                           {fmtTime(m.createdAt)}
                         </td>
-                        <td className="px-4 py-3.5 text-[#94A3B8] hidden lg:table-cell">
+                        <td className="px-4 py-3.5 text-[#475569] hidden lg:table-cell">
                           {m.createdBy?.name ?? '—'}
                         </td>
                       </tr>

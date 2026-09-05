@@ -63,11 +63,11 @@ const TicketsNew = () => {
   return (
     <div className="max-w-lg mx-auto px-6 pt-12 pb-24">
       <div className="mb-8">
-        <Link to="/tickets" className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors">
+        <Link to="/tickets" className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors">
           ← Soporte
         </Link>
         <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A] mt-4">Nuevo ticket</h1>
-        <p className="text-[13px] text-[#94A3B8] mt-1">Describí el problema o consulta.</p>
+        <p className="text-[13px] text-[#475569] mt-1">Describí el problema o consulta.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -116,14 +116,14 @@ const TicketsNew = () => {
 
         <div>
           <label className="block text-[13px] font-medium text-[#64748B] mb-1.5">
-            Imágenes adjuntas <span className="text-[#CBD5E1] normal-case font-normal">(máx. 3 · hasta 2 MB c/u)</span>
+            Imágenes adjuntas <span className="text-[#64748B] normal-case font-normal">(máx. 3 · hasta 2 MB c/u)</span>
           </label>
           <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
           {files.length < 3 && (
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="border border-dashed border-[#E2E8F0] rounded-lg px-4 py-3 text-[12px] text-[#94A3B8]
+              className="border border-dashed border-[#E2E8F0] rounded-lg px-4 py-3 text-[12px] text-[#475569]
                 hover:border-[#3B82F6]/40 hover:text-[#64748B] transition-colors w-full text-left"
             >
               + Agregar imagen
@@ -134,7 +134,7 @@ const TicketsNew = () => {
               {files.map((f, i) => (
                 <div key={i} className="flex items-center justify-between bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg px-3 py-2">
                   <span className="text-[12px] text-[#64748B] truncate">{f.name}</span>
-                  <button type="button" onClick={() => removeFile(i)} className="text-[#94A3B8] hover:text-red-400 transition-colors ml-3 text-[11px]">
+                  <button type="button" onClick={() => removeFile(i)} className="text-[#475569] hover:text-red-400 transition-colors ml-3 text-[11px]">
                     Quitar
                   </button>
                 </div>
@@ -158,7 +158,7 @@ const TicketsNew = () => {
           >
             {mutation.isPending ? 'Enviando...' : 'Enviar ticket'}
           </button>
-          <Link to="/tickets" className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors">
+          <Link to="/tickets" className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors">
             Cancelar
           </Link>
         </div>

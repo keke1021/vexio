@@ -10,7 +10,7 @@ export const STATUS_CONFIG = {
   IN_PROGRESS:   { label: 'En reparación',        cls: 'text-[#60A5FA] bg-[#EFF6FF]' },
   WAITING_PARTS: { label: 'Esperando repuestos',  cls: 'text-orange-500 bg-orange-50' },
   READY:         { label: 'Listo para entregar',  cls: 'text-emerald-600 bg-emerald-50 ring-1 ring-emerald-200' },
-  DELIVERED:     { label: 'Entregado',            cls: 'text-[#94A3B8] bg-[#F8FAFC]' },
+  DELIVERED:     { label: 'Entregado',            cls: 'text-[#475569] bg-[#F8FAFC]' },
   CANCELLED:     { label: 'Cancelado',            cls: 'text-red-400 bg-red-50' },
 };
 
@@ -88,7 +88,7 @@ const RepairsList = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Reparaciones</h1>
-          <p className="text-[13px] text-[#94A3B8] mt-0.5">
+          <p className="text-[13px] text-[#475569] mt-0.5">
             {isLoading ? '...' : `${total} orden${total !== 1 ? 'es' : ''}`}
           </p>
         </div>
@@ -147,26 +147,26 @@ const RepairsList = () => {
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">#</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Cliente</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Equipo</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Falla</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Estado</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Técnico</th>
-              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Presupuesto</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden xl:table-cell">Entrega est.</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">#</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Cliente</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden sm:table-cell">Equipo</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Falla</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Estado</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden lg:table-cell">Técnico</th>
+              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden lg:table-cell">Presupuesto</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden xl:table-cell">Entrega est.</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={8} className="text-center py-16 text-[#CBD5E1]">Cargando...</td></tr>
+              <tr><td colSpan={8} className="text-center py-16 text-[#64748B]">Cargando...</td></tr>
             )}
             {isError && (
               <tr><td colSpan={8} className="text-center py-16 text-red-400">Error al cargar las órdenes.</td></tr>
             )}
             {!isLoading && !isError && repairs.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center py-16 text-[#CBD5E1]">
+                <td colSpan={8} className="text-center py-16 text-[#64748B]">
                   No hay órdenes{statusFilter ? ` con estado "${STATUS_CONFIG[statusFilter]?.label}"` : ''}.
                 </td>
               </tr>
@@ -177,21 +177,21 @@ const RepairsList = () => {
                 onClick={() => navigate(`/repairs/${r.id}`)}
                 className="border-b border-[#E2E8F0] hover:bg-[#EFF6FF] transition-colors cursor-pointer"
               >
-                <td className="px-4 py-3.5 font-mono text-[11px] text-[#94A3B8]">{refId(r.id)}</td>
+                <td className="px-4 py-3.5 font-mono text-[11px] text-[#475569]">{refId(r.id)}</td>
                 <td className="px-4 py-3.5">
                   <p className="text-[#0F172A] font-medium">{r.customerName}</p>
-                  <p className="text-[#94A3B8] text-[11px]">{r.customerPhone}</p>
+                  <p className="text-[#475569] text-[11px]">{r.customerPhone}</p>
                 </td>
                 <td className="px-4 py-3.5 text-[#64748B] hidden sm:table-cell">{r.deviceModel}</td>
-                <td className="px-4 py-3.5 text-[#94A3B8] hidden md:table-cell">{FAULT_LABELS[r.faultType]}</td>
+                <td className="px-4 py-3.5 text-[#475569] hidden md:table-cell">{FAULT_LABELS[r.faultType]}</td>
                 <td className="px-4 py-3.5"><StatusBadge status={r.status} /></td>
-                <td className="px-4 py-3.5 text-[#94A3B8] hidden lg:table-cell">{r.technician?.name ?? '—'}</td>
+                <td className="px-4 py-3.5 text-[#475569] hidden lg:table-cell">{r.technician?.name ?? '—'}</td>
                 <td className="px-4 py-3.5 text-right text-[#64748B] hidden lg:table-cell">
                   {r.budget != null
                     ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(r.budget)
                     : '—'}
                 </td>
-                <td className="px-4 py-3.5 text-[#94A3B8] hidden xl:table-cell">{formatDate(r.estimatedDate)}</td>
+                <td className="px-4 py-3.5 text-[#475569] hidden xl:table-cell">{formatDate(r.estimatedDate)}</td>
               </tr>
             ))}
           </tbody>

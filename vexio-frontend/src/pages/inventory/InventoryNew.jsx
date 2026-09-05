@@ -20,7 +20,7 @@ const calcMargin = (cost, sale) => {
 };
 
 const getMarginStyle = (m) => {
-  if (m === null) return { color: 'text-[#CBD5E1]', label: '—' };
+  if (m === null) return { color: 'text-[#64748B]', label: '—' };
   const n = parseFloat(m);
   if (n >= 30) return { color: 'text-emerald-600', label: `${m}%` };
   if (n >= 10) return { color: 'text-yellow-600', label: `${m}%` };
@@ -151,7 +151,7 @@ const InventoryNew = () => {
   return (
     <div className="px-6 pt-8 pb-16 max-w-2xl mx-auto">
       <div className="flex items-center gap-3 mb-8">
-        <Link to="/inventory" className="text-[#94A3B8] hover:text-[#64748B] transition-colors text-[13px]">
+        <Link to="/inventory" className="text-[#475569] hover:text-[#64748B] transition-colors text-[13px]">
           ← Inventario
         </Link>
         <span className="text-[#E2E8F0]">/</span>
@@ -176,7 +176,7 @@ const InventoryNew = () => {
               maxLength={15}
             />
             {form.imei && (
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#CBD5E1]">
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#64748B]">
                 {form.imei.length}/15
               </span>
             )}
@@ -195,7 +195,7 @@ const InventoryNew = () => {
                 onChange={set('productName')}
                 required
               />
-              <p className="mt-1 text-[11px] text-[#CBD5E1]">Nombre del modelo</p>
+              <p className="mt-1 text-[11px] text-[#64748B]">Nombre del modelo</p>
             </div>
             <div className="flex-1 min-w-0">
               <Input
@@ -205,7 +205,7 @@ const InventoryNew = () => {
                 onChange={set('color')}
                 required
               />
-              <p className="mt-1 text-[11px] text-[#CBD5E1]">Color</p>
+              <p className="mt-1 text-[11px] text-[#64748B]">Color</p>
             </div>
             <div className="flex-1 min-w-0">
               <div className="relative">
@@ -219,13 +219,13 @@ const InventoryNew = () => {
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
-                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[#94A3B8]">
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[#475569]">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="6 9 12 15 18 9"/>
                   </svg>
                 </span>
               </div>
-              <p className="mt-1 text-[11px] text-[#CBD5E1]">Storage</p>
+              <p className="mt-1 text-[11px] text-[#64748B]">Storage</p>
             </div>
           </div>
         </div>
@@ -250,7 +250,7 @@ const InventoryNew = () => {
                 className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all ${
                   form.currencyCode === cur
                     ? 'text-white border-transparent'
-                    : 'bg-white border-[#E2E8F0] text-[#94A3B8] hover:text-[#64748B]'
+                    : 'bg-white border-[#E2E8F0] text-[#475569] hover:text-[#64748B]'
                 }`}
                 style={form.currencyCode === cur ? { backgroundColor: '#1E3A5F' } : {}}
               >
@@ -269,7 +269,7 @@ const InventoryNew = () => {
                 step="0.01"
                 required
               />
-              <p className="mt-1 text-[11px] text-[#CBD5E1]">Costo ({form.currencyCode})</p>
+              <p className="mt-1 text-[11px] text-[#64748B]">Costo ({form.currencyCode})</p>
             </div>
             <div className="flex-1 min-w-0">
               <Input
@@ -281,11 +281,11 @@ const InventoryNew = () => {
                 step="0.01"
                 required
               />
-              <p className="mt-1 text-[11px] text-[#CBD5E1]">Precio de venta ({form.currencyCode})</p>
+              <p className="mt-1 text-[11px] text-[#64748B]">Precio de venta ({form.currencyCode})</p>
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <span className="text-[11px] text-[#94A3B8] uppercase tracking-wider">Margen:</span>
+            <span className="text-[11px] text-[#475569] uppercase tracking-wider">Margen:</span>
             <span className={`text-[14px] font-bold transition-colors ${marginStyle.color}`}>
               {marginStyle.label}
             </span>
@@ -333,7 +333,7 @@ const InventoryNew = () => {
                   className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${
                     active
                       ? 'border-[#3B82F6] bg-[#EFF6FF] text-[#3B82F6]'
-                      : 'border-[#E2E8F0] bg-white text-[#94A3B8] hover:border-[#3B82F6]/40'
+                      : 'border-[#E2E8F0] bg-white text-[#475569] hover:border-[#3B82F6]/40'
                   }`}
                 >
                   {active ? '✓ ' : ''}{acc}
@@ -368,7 +368,7 @@ const InventoryNew = () => {
           </button>
           <Link
             to="/inventory"
-            className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors"
+            className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors"
           >
             Cancelar
           </Link>

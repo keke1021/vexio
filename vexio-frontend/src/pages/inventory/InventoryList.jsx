@@ -2,13 +2,14 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
+import { X, AlertTriangle, Download } from 'lucide-react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 
 const CONDITIONS = { NEW: 'Nuevo', LIKE_NEW: 'Como nuevo', REFURBISHED: 'Reacond.', USED: 'Usado' };
 
 const getStockBadge = (item) => {
-  if (item.status === 'SOLD')      return { label: 'Vendido',    cls: 'text-[#94A3B8] bg-[#F1F5F9]' };
+  if (item.status === 'SOLD')      return { label: 'Vendido',    cls: 'text-[#475569] bg-[#F1F5F9]' };
   if (item.status === 'RESERVED')  return { label: 'Reservado',  cls: 'text-[#3B82F6] bg-[#EFF6FF]' };
   if (item.status === 'DEFECTIVE') return { label: 'Baja',       cls: 'text-red-500 bg-red-50' };
   if (item.stockCount === 1)                          return { label: 'Último',     cls: 'text-orange-500 bg-orange-50' };
@@ -54,7 +55,7 @@ const AlertsBanner = () => {
 
   return (
     <div className="mb-5 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 flex items-start gap-3">
-      <span className="text-yellow-500 text-[13px] mt-px">⚠</span>
+      <AlertTriangle size={15} className="text-yellow-500 mt-0.5 shrink-0" />
       <div>
         <p className="text-[13px] text-yellow-700 font-medium">
           {data.total} modelo{data.total > 1 ? 's' : ''} con stock bajo
@@ -130,9 +131,10 @@ const BulkUploadModal = ({ tiendas, onClose, onSuccess }) => {
           <h2 className="text-[16px] font-semibold text-[#0F172A]">Carga masiva de inventario</h2>
           <button
             onClick={onClose}
-            className="text-[#94A3B8] hover:text-[#64748B] text-[22px] leading-none transition-colors"
+            className="text-[#475569] hover:text-[#64748B] transition-colors"
+            aria-label="Cerrar"
           >
-            ×
+            <X size={20} />
           </button>
         </div>
 
@@ -165,20 +167,20 @@ const BulkUploadModal = ({ tiendas, onClose, onSuccess }) => {
 
             <div className="border border-[#E2E8F0] rounded-xl p-4 mb-3">
               <p className="text-[13px] text-[#0F172A] font-medium mb-1">1. Descargá la plantilla</p>
-              <p className="text-[12px] text-[#94A3B8] mb-3">
+              <p className="text-[12px] text-[#475569] mb-3">
                 Completá el archivo Excel con los datos de tus equipos. El campo IMEI es opcional.
               </p>
               <button
                 onClick={downloadTemplate}
-                className="text-[12px] text-[#3B82F6] hover:text-[#2563EB] font-medium transition-colors"
+                className="inline-flex items-center gap-1 text-[12px] text-[#3B82F6] hover:text-[#2563EB] font-medium transition-colors"
               >
-                ↓ Descargar plantilla.xlsx
+                <Download size={13} /> Descargar plantilla.xlsx
               </button>
             </div>
 
             <div className="border border-[#E2E8F0] rounded-xl p-4 mb-4">
               <p className="text-[13px] text-[#0F172A] font-medium mb-1">2. Subí el archivo completado</p>
-              <p className="text-[12px] text-[#94A3B8] mb-3">Solo se aceptan archivos .xlsx y .csv</p>
+              <p className="text-[12px] text-[#475569] mb-3">Solo se aceptan archivos .xlsx y .csv</p>
               <input
                 type="file"
                 accept=".xlsx,.csv"
@@ -189,7 +191,7 @@ const BulkUploadModal = ({ tiendas, onClose, onSuccess }) => {
                   hover:file:bg-[#D6EBFA] file:cursor-pointer file:transition-colors"
               />
               {file && (
-                <p className="text-[11px] text-[#94A3B8] mt-2">{file.name}</p>
+                <p className="text-[11px] text-[#475569] mt-2">{file.name}</p>
               )}
             </div>
 
@@ -201,14 +203,14 @@ const BulkUploadModal = ({ tiendas, onClose, onSuccess }) => {
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                <p className="text-[11px] text-[#94A3B8] mt-1.5">Procesando... {progress}%</p>
+                <p className="text-[11px] text-[#475569] mt-1.5">Procesando... {progress}%</p>
               </div>
             )}
 
             <div className="flex justify-end gap-3">
               <button
                 onClick={onClose}
-                className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors px-4 py-2"
+                className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors px-4 py-2"
               >
                 Cancelar
               </button>
@@ -239,19 +241,19 @@ const BulkUploadModal = ({ tiendas, onClose, onSuccess }) => {
             <div className="flex items-center gap-6 mb-5">
               <div className="text-center">
                 <p className="text-[32px] font-bold text-emerald-600">{result.loaded}</p>
-                <p className="text-[11px] text-[#94A3B8] mt-0.5">cargados correctamente</p>
+                <p className="text-[11px] text-[#475569] mt-0.5">cargados correctamente</p>
               </div>
               {result.failed > 0 && (
                 <div className="text-center">
                   <p className="text-[32px] font-bold text-red-500">{result.failed}</p>
-                  <p className="text-[11px] text-[#94A3B8] mt-0.5">errores</p>
+                  <p className="text-[11px] text-[#475569] mt-0.5">errores</p>
                 </div>
               )}
             </div>
 
             {result.errors?.length > 0 && (
               <div className="border border-[#E2E8F0] rounded-xl p-3 max-h-44 overflow-y-auto mb-4">
-                <p className="text-[10px] text-[#94A3B8] uppercase tracking-wider mb-2">Detalle de errores</p>
+                <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-2">Detalle de errores</p>
                 {result.errors.map((e, i) => (
                   <p key={i} className="text-[12px] text-red-500 mb-1">
                     Fila {e.row}: {e.reason}
@@ -362,7 +364,7 @@ const InventoryList = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Inventario</h1>
-          <p className="text-[13px] text-[#94A3B8] mt-0.5">
+          <p className="text-[13px] text-[#475569] mt-0.5">
             {isLoading ? '...' : total === 0
               ? '0 equipos'
               : `Mostrando ${rangeStart}-${rangeEnd} de ${total} equipo${total !== 1 ? 's' : ''}`}
@@ -448,24 +450,24 @@ const InventoryList = () => {
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">IMEI</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Modelo</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Condición</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">IMEI</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Modelo</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Condición</th>
               {tiendas.length > 1 && (
-                <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Sucursal</th>
+                <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Sucursal</th>
               )}
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Estado</th>
-              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Precio</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Moneda</th>
-              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Margen</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden xl:table-cell">Proveedor</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden xl:table-cell">Fecha</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Estado</th>
+              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden lg:table-cell">Precio</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden lg:table-cell">Moneda</th>
+              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden lg:table-cell">Margen</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden xl:table-cell">Proveedor</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden xl:table-cell">Fecha</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={tiendas.length > 1 ? 10 : 9} className="text-center py-16 text-[#CBD5E1] text-[13px]">Cargando...</td>
+                <td colSpan={tiendas.length > 1 ? 10 : 9} className="text-center py-16 text-[#64748B] text-[13px]">Cargando...</td>
               </tr>
             )}
             {isError && (
@@ -475,7 +477,7 @@ const InventoryList = () => {
             )}
             {!isLoading && !isError && items.length === 0 && (
               <tr>
-                <td colSpan={tiendas.length > 1 ? 10 : 9} className="text-center py-16 text-[#CBD5E1] text-[13px]">No hay equipos que coincidan con los filtros.</td>
+                <td colSpan={tiendas.length > 1 ? 10 : 9} className="text-center py-16 text-[#64748B] text-[13px]">No hay equipos que coincidan con los filtros.</td>
               </tr>
             )}
             {items.map((item) => {
@@ -486,18 +488,18 @@ const InventoryList = () => {
                   onClick={() => navigate(`/inventory/${item.id}`)}
                   className="border-b border-[#E2E8F0] hover:bg-[#EFF6FF] transition-colors cursor-pointer group"
                 >
-                  <td className="px-4 py-3.5 font-mono text-[#94A3B8] text-[12px] group-hover:text-[#64748B] transition-colors">
+                  <td className="px-4 py-3.5 font-mono text-[#475569] text-[12px] group-hover:text-[#64748B] transition-colors">
                     {item.imei}
                   </td>
                   <td className="px-4 py-3.5">
                     <p className="text-[#0F172A] font-medium">{item.product.name}</p>
-                    <p className="text-[#94A3B8] text-[11px]">{item.product.color} · {item.product.storage}</p>
+                    <p className="text-[#475569] text-[11px]">{item.product.color} · {item.product.storage}</p>
                   </td>
                   <td className="px-4 py-3.5 text-[#64748B] hidden md:table-cell">
                     {CONDITIONS[item.condition]}
                   </td>
                   {tiendas.length > 1 && (
-                    <td className="px-4 py-3.5 text-[#94A3B8] hidden md:table-cell">
+                    <td className="px-4 py-3.5 text-[#475569] hidden md:table-cell">
                       {item.tienda?.name ?? '—'}
                     </td>
                   )}
@@ -519,10 +521,10 @@ const InventoryList = () => {
                   <td className={`px-4 py-3.5 text-right font-medium hidden lg:table-cell ${getMarginColor(item.margin)}`}>
                     {item.margin.toFixed(1)}%
                   </td>
-                  <td className="px-4 py-3.5 text-[#94A3B8] hidden xl:table-cell">
+                  <td className="px-4 py-3.5 text-[#475569] hidden xl:table-cell">
                     {item.supplier?.name ?? '—'}
                   </td>
-                  <td className="px-4 py-3.5 text-[#CBD5E1] hidden xl:table-cell">
+                  <td className="px-4 py-3.5 text-[#64748B] hidden xl:table-cell">
                     {formatDate(item.createdAt)}
                   </td>
                 </tr>
@@ -534,7 +536,7 @@ const InventoryList = () => {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
-          <p className="text-[12px] text-[#94A3B8]">
+          <p className="text-[12px] text-[#475569]">
             Página {page} de {totalPages}
           </p>
           <div className="flex items-center gap-2">

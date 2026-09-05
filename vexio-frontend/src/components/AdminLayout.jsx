@@ -73,7 +73,7 @@ const AdminLayout = () => {
         <div className="flex items-center gap-4">
           <button
             onClick={toggle}
-            className="text-[#94A3B8] hover:text-[#64748B] transition-colors"
+            className="text-[#475569] hover:text-[#64748B] transition-colors"
             title={dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
           >
             {dark ? <SunIcon /> : <MoonIcon />}
@@ -81,7 +81,7 @@ const AdminLayout = () => {
           <span className="text-[12px] text-violet-500 hidden sm:block">{user?.name}</span>
           <button
             onClick={handleLogout}
-            className="text-[12px] text-[#94A3B8] hover:text-[#64748B] transition-colors"
+            className="text-[12px] text-[#475569] hover:text-[#64748B] transition-colors"
           >
             Salir
           </button>

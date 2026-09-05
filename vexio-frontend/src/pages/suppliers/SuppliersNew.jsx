@@ -52,7 +52,7 @@ const SuppliersNew = () => {
   return (
     <div className="px-6 pt-8 pb-16 max-w-lg mx-auto">
       <div className="flex items-center gap-3 mb-8">
-        <Link to="/suppliers" className="text-[#94A3B8] hover:text-[#64748B] transition-colors text-[13px]">← Proveedores</Link>
+        <Link to="/suppliers" className="text-[#475569] hover:text-[#64748B] transition-colors text-[13px]">← Proveedores</Link>
         <span className="text-[#E2E8F0]">/</span>
         <span className="text-[13px] text-[#64748B]">Nuevo proveedor</span>
       </div>
@@ -119,7 +119,7 @@ const SuppliersNew = () => {
           >
             {mutation.isPending ? 'Creando...' : 'Crear proveedor'}
           </button>
-          <Link to="/suppliers" className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors">Cancelar</Link>
+          <Link to="/suppliers" className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors">Cancelar</Link>
         </div>
       </form>
     </div>

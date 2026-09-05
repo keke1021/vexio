@@ -63,7 +63,7 @@ const PosSaleDetail = () => {
 
   if (isError || !sale) {
     return (
-      <div className="px-6 pt-12 text-center text-[#94A3B8] text-[13px]">
+      <div className="px-6 pt-12 text-center text-[#475569] text-[13px]">
         <p>Venta no encontrada.</p>
         <Link to="/pos/sales" className="text-[#3B82F6] hover:underline mt-2 block">Volver al historial</Link>
       </div>
@@ -74,7 +74,7 @@ const PosSaleDetail = () => {
     <div className="px-6 pt-8 pb-16">
 
       <div className="flex items-center gap-3 mb-8 print:hidden">
-        <Link to="/pos/sales" className="text-[#94A3B8] hover:text-[#64748B] transition-colors text-[13px]">
+        <Link to="/pos/sales" className="text-[#475569] hover:text-[#64748B] transition-colors text-[13px]">
           ← Historial
         </Link>
         <span className="text-[#E2E8F0]">/</span>

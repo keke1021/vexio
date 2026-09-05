@@ -43,7 +43,7 @@ const SuppliersList = () => {
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Proveedores</h1>
-          <p className="text-[13px] text-[#94A3B8] mt-0.5">
+          <p className="text-[13px] text-[#475569] mt-0.5">
             {isLoading ? '...' : `${suppliers.length} proveedor${suppliers.length !== 1 ? 'es' : ''}`}
             {CURRENCIES.filter((c) => totalDebtByCurrency[c] > 0).map((cur) => (
               <span key={cur} className="ml-2 text-orange-500">
@@ -67,24 +67,24 @@ const SuppliersList = () => {
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Proveedor</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Ciudad</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Plazo</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Contacto</th>
-              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Pendiente de recibir</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Items</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Proveedor</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden sm:table-cell">Ciudad</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Plazo</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden lg:table-cell">Contacto</th>
+              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Pendiente de recibir</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden sm:table-cell">Items</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={6} className="text-center py-16 text-[#CBD5E1]">Cargando...</td></tr>
+              <tr><td colSpan={6} className="text-center py-16 text-[#64748B]">Cargando...</td></tr>
             )}
             {isError && (
               <tr><td colSpan={6} className="text-center py-16 text-red-400">Error al cargar.</td></tr>
             )}
             {!isLoading && !isError && suppliers.length === 0 && (
               <tr>
-                <td colSpan={6} className="text-center py-16 text-[#CBD5E1]">
+                <td colSpan={6} className="text-center py-16 text-[#64748B]">
                   Sin proveedores. <Link to="/suppliers/new" className="text-[#3B82F6] hover:underline">Crear uno</Link>
                 </td>
               </tr>
@@ -100,11 +100,11 @@ const SuppliersList = () => {
                 </td>
                 <td className="px-4 py-3.5 text-[#64748B] hidden sm:table-cell">{s.city}</td>
                 <td className="px-4 py-3.5 hidden md:table-cell">
-                  <span className="text-[#94A3B8] text-[11px]">{s.paymentDays}d</span>
+                  <span className="text-[#475569] text-[11px]">{s.paymentDays}d</span>
                 </td>
                 <td className="px-4 py-3.5 hidden lg:table-cell">
-                  <p className="text-[#94A3B8] text-[12px]">{s.phone ?? '—'}</p>
-                  {s.email && <p className="text-[#CBD5E1] text-[11px]">{s.email}</p>}
+                  <p className="text-[#475569] text-[12px]">{s.phone ?? '—'}</p>
+                  {s.email && <p className="text-[#64748B] text-[11px]">{s.email}</p>}
                 </td>
                 <td className="px-4 py-3.5 text-right">
                   {Object.keys(s.debtByCurrency ?? {}).length > 0 ? (
@@ -116,11 +116,11 @@ const SuppliersList = () => {
                       ))}
                     </div>
                   ) : (
-                    <span className="text-[#CBD5E1]">—</span>
+                    <span className="text-[#64748B]">—</span>
                   )}
                 </td>
                 <td className="px-4 py-3.5 hidden sm:table-cell">
-                  <span className="text-[#94A3B8] text-[12px]">{s._count?.items ?? 0}</span>
+                  <span className="text-[#475569] text-[12px]">{s._count?.items ?? 0}</span>
                 </td>
               </tr>
             ))}

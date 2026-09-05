@@ -16,7 +16,7 @@ const STATUS_CONFIG = {
 };
 
 const PlanBadge = ({ plan }) => {
-  const cfg = PLAN_CONFIG[plan] ?? { label: plan, cls: 'text-[#94A3B8] bg-[#F1F5F9]' };
+  const cfg = PLAN_CONFIG[plan] ?? { label: plan, cls: 'text-[#475569] bg-[#F1F5F9]' };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${cfg.cls}`}>
       {cfg.label}
@@ -25,7 +25,7 @@ const PlanBadge = ({ plan }) => {
 };
 
 const StatusBadge = ({ status }) => {
-  const cfg = STATUS_CONFIG[status] ?? { label: status, cls: 'text-[#94A3B8] bg-[#F1F5F9]' };
+  const cfg = STATUS_CONFIG[status] ?? { label: status, cls: 'text-[#475569] bg-[#F1F5F9]' };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${cfg.cls}`}>
       {cfg.label}
@@ -94,7 +94,7 @@ const CreateTenantForm = ({ onSuccess, onCancel }) => {
           <input type="text" placeholder="Mi Tienda iPhone" value={form.tenantName} onChange={handleTenantNameChange} required className={`${inputCls} w-full`} />
         </div>
         <div>
-          <label className="block text-[10px] font-medium text-[#94A3B8] mb-1.5 uppercase tracking-[0.1em]">ID / slug (auto)</label>
+          <label className="block text-[10px] font-medium text-[#475569] mb-1.5 uppercase tracking-[0.1em]">ID / slug (auto)</label>
           <input type="text" placeholder="mi-tienda-iphone" value={form.tenantSlug} onChange={handleSlugChange} required className={`${inputCls} w-full font-mono`} />
         </div>
         <div>
@@ -120,7 +120,7 @@ const CreateTenantForm = ({ onSuccess, onCancel }) => {
           className="bg-violet-600 hover:bg-violet-700 text-white text-[13px] font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-40">
           {mutation.isPending ? 'Creando...' : 'Crear tenant'}
         </button>
-        <button type="button" onClick={onCancel} className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors">Cancelar</button>
+        <button type="button" onClick={onCancel} className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors">Cancelar</button>
       </div>
     </form>
   );
@@ -158,7 +158,7 @@ const AdminTenants = () => {
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Tiendas</h1>
-          <p className="text-[13px] text-[#94A3B8] mt-0.5">
+          <p className="text-[13px] text-[#475569] mt-0.5">
             {isLoading ? '...' : (
               <>
                 {tenants.length} tiendas
@@ -201,30 +201,30 @@ const AdminTenants = () => {
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Tienda</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Slug</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Plan</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Estado</th>
-              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Usuarios</th>
-              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Stock</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Vencimiento</th>
-              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden xl:table-cell">Alta</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Tienda</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden sm:table-cell">Slug</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Plan</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Estado</th>
+              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Usuarios</th>
+              <th className="text-right px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden lg:table-cell">Stock</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden lg:table-cell">Vencimiento</th>
+              <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden xl:table-cell">Alta</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={8} className="text-center py-16 text-[#CBD5E1]">Cargando...</td></tr>
+              <tr><td colSpan={8} className="text-center py-16 text-[#64748B]">Cargando...</td></tr>
             )}
             {isError && (
               <tr>
                 <td colSpan={8} className="text-center py-10">
                   <p className="text-red-500 text-[13px] font-medium mb-1">Error al cargar tiendas</p>
-                  <p className="text-[11px] text-[#94A3B8] font-mono">{errDetail}</p>
+                  <p className="text-[11px] text-[#475569] font-mono">{errDetail}</p>
                 </td>
               </tr>
             )}
             {!isLoading && tenants.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-16 text-[#CBD5E1]">Sin tiendas registradas.</td></tr>
+              <tr><td colSpan={8} className="text-center py-16 text-[#64748B]">Sin tiendas registradas.</td></tr>
             )}
             {tenants.map((t) => (
               <tr
@@ -234,15 +234,15 @@ const AdminTenants = () => {
               >
                 <td className="px-4 py-3.5">
                   <p className="text-[#0F172A] font-medium">{t.name}</p>
-                  <p className="text-[#94A3B8] text-[11px]">{t.email}</p>
+                  <p className="text-[#475569] text-[11px]">{t.email}</p>
                 </td>
-                <td className="px-4 py-3.5 text-[#94A3B8] font-mono text-[12px] hidden sm:table-cell">{t.slug}</td>
+                <td className="px-4 py-3.5 text-[#475569] font-mono text-[12px] hidden sm:table-cell">{t.slug}</td>
                 <td className="px-4 py-3.5"><PlanBadge plan={t.plan} /></td>
                 <td className="px-4 py-3.5"><StatusBadge status={t.status} /></td>
-                <td className="px-4 py-3.5 text-right text-[#94A3B8] hidden md:table-cell">{t._count.users}</td>
-                <td className="px-4 py-3.5 text-right text-[#94A3B8] hidden lg:table-cell">{t._count.inventoryItems}</td>
-                <td className="px-4 py-3.5 text-[#94A3B8] text-[12px] hidden lg:table-cell">{t.subscriptionEndsAt ? fmtDate(t.subscriptionEndsAt) : '—'}</td>
-                <td className="px-4 py-3.5 text-[#CBD5E1] text-[12px] hidden xl:table-cell">{fmtDate(t.createdAt)}</td>
+                <td className="px-4 py-3.5 text-right text-[#475569] hidden md:table-cell">{t._count.users}</td>
+                <td className="px-4 py-3.5 text-right text-[#475569] hidden lg:table-cell">{t._count.inventoryItems}</td>
+                <td className="px-4 py-3.5 text-[#475569] text-[12px] hidden lg:table-cell">{t.subscriptionEndsAt ? fmtDate(t.subscriptionEndsAt) : '—'}</td>
+                <td className="px-4 py-3.5 text-[#64748B] text-[12px] hidden xl:table-cell">{fmtDate(t.createdAt)}</td>
               </tr>
             ))}
           </tbody>

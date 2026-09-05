@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { useState, Fragment } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/axios';
@@ -21,7 +21,7 @@ const CURRENCY_LABELS = { ARS: 'ARS', USD: 'USD', USDT: 'USDT' };
 const PAYMENT_TYPE_LABELS = { IMPLEMENTATION: 'Implementación', MONTHLY: 'Mensualidad' };
 
 const Badge = ({ config, value }) => {
-  const cfg = config[value] ?? { label: value, cls: 'text-[#94A3B8] bg-[#F1F5F9]' };
+  const cfg = config[value] ?? { label: value, cls: 'text-[#475569] bg-[#F1F5F9]' };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${cfg.cls}`}>
       {cfg.label}
@@ -32,7 +32,7 @@ const Badge = ({ config, value }) => {
 const StatCard = ({ label, value }) => (
   <div className="bg-white border border-[#E2E8F0] rounded-xl px-4 py-3.5"
     style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-    <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-1.5">{label}</p>
+    <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.12em] mb-1.5">{label}</p>
     <p className="text-[20px] font-bold text-[#0F172A]">{value}</p>
   </div>
 );
@@ -104,7 +104,7 @@ const PaymentForm = ({ tenantId, onSuccess, onCancel }) => {
           className="bg-violet-600 hover:bg-violet-700 text-white text-[13px] font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-40">
           {mutation.isPending ? 'Guardando...' : 'Registrar pago'}
         </button>
-        <button type="button" onClick={onCancel} className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors">Cancelar</button>
+        <button type="button" onClick={onCancel} className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors">Cancelar</button>
       </div>
     </form>
   );
@@ -193,7 +193,7 @@ const AddUserForm = ({ tenantId, tiendas, onSuccess, onCancel }) => {
           className="bg-violet-600 hover:bg-violet-700 text-white text-[13px] font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-40">
           {mutation.isPending ? 'Creando...' : 'Crear usuario'}
         </button>
-        <button type="button" onClick={onCancel} className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors">Cancelar</button>
+        <button type="button" onClick={onCancel} className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors">Cancelar</button>
       </div>
     </form>
   );
@@ -236,7 +236,7 @@ const TiendaForm = ({ tenantId, onSuccess, onCancel }) => {
           className="bg-violet-600 hover:bg-violet-700 text-white text-[13px] font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-40">
           {mutation.isPending ? 'Creando...' : 'Crear sucursal'}
         </button>
-        <button type="button" onClick={onCancel} className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors">Cancelar</button>
+        <button type="button" onClick={onCancel} className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors">Cancelar</button>
       </div>
     </form>
   );
@@ -277,6 +277,19 @@ const AdminTenantDetail = () => {
     mutationFn: (userId) => api.delete(`/admin/tenants/${id}/users/${userId}`).then((r) => r.data),
     onSuccess: () => { setActionError(''); invalidate(); },
     onError: (err) => setActionError(err.response?.data?.message || 'Error al eliminar el usuario.'),
+  });
+
+  // Reset de contraseña — único camino existente para que un usuario recupere
+  // acceso: el sistema no tiene flujo de "olvidé mi contraseña". Lo hace
+  // SUPERADMIN a mano desde acá, fila por fila.
+  const [resetUserId, setResetUserId] = useState(null);
+  const [resetValue,  setResetValue]  = useState('');
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: ({ userId, newPassword }) =>
+      api.put(`/admin/tenants/${id}/users/${userId}/password`, { newPassword }).then((r) => r.data),
+    onSuccess: () => { setActionError(''); setResetUserId(null); setResetValue(''); },
+    onError: (err) => setActionError(err.response?.data?.message || 'Error al cambiar la contraseña.'),
   });
 
   // Usado para status (Suspender/Activar), storeCount y maxUsers — plan+modules usan saveMutation
@@ -328,11 +341,11 @@ const AdminTenantDetail = () => {
   const payments = paymentsData?.payments ?? [];
   const totalByCurrency = paymentsData?.totalByCurrency ?? {};
 
-  if (isLoading) return <div className="px-6 pt-8 text-[#CBD5E1] text-[13px]">Cargando...</div>;
+  if (isLoading) return <div className="px-6 pt-8 text-[#64748B] text-[13px]">Cargando...</div>;
 
   if (!tenant) return (
     <div className="px-6 pt-8">
-      <p className="text-[#94A3B8] text-[13px]">Tienda no encontrada.</p>
+      <p className="text-[#475569] text-[13px]">Tienda no encontrada.</p>
       <Link to="/admin" className="text-violet-600 text-[13px] mt-2 inline-block">← Volver</Link>
     </div>
   );
@@ -350,7 +363,7 @@ const AdminTenantDetail = () => {
     <div className="px-6 pt-8 pb-16 max-w-[900px] mx-auto">
 
       <div className="flex items-center gap-3 mb-8">
-        <Link to="/admin" className="text-[#94A3B8] hover:text-[#64748B] transition-colors text-[13px]">← Tiendas</Link>
+        <Link to="/admin" className="text-[#475569] hover:text-[#64748B] transition-colors text-[13px]">← Tiendas</Link>
         <span className="text-[#E2E8F0]">/</span>
         <span className="text-[13px] text-[#64748B]">{tenant.name}</span>
       </div>
@@ -362,7 +375,7 @@ const AdminTenantDetail = () => {
             <Badge config={PLAN_CONFIG} value={tenant.plan} />
             <Badge config={STATUS_CONFIG} value={tenant.status} />
           </div>
-          <p className="text-[13px] text-[#94A3B8] font-mono">{tenant.slug}</p>
+          <p className="text-[13px] text-[#475569] font-mono">{tenant.slug}</p>
         </div>
       </div>
 
@@ -375,12 +388,12 @@ const AdminTenantDetail = () => {
           ['Dirección', tenant.address ?? '—'],
         ].map(([label, val]) => (
           <div key={label}>
-            <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-1">{label}</p>
+            <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.12em] mb-1">{label}</p>
             <p className="text-[13px] text-[#64748B]">{val}</p>
           </div>
         ))}
         <div>
-          <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-1">
+          <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.12em] mb-1">
             Sucursales activas
           </p>
           <div className="flex items-center gap-2">
@@ -403,10 +416,10 @@ const AdminTenantDetail = () => {
               </button>
             )}
           </div>
-          <p className="text-[10px] text-[#CBD5E1] mt-1">Solo informativo — no afecta ningún cálculo</p>
+          <p className="text-[10px] text-[#64748B] mt-1">Solo informativo — no afecta ningún cálculo</p>
         </div>
         <div>
-          <p className="text-[10px] font-medium text-[#94A3B8] uppercase tracking-[0.12em] mb-1">
+          <p className="text-[10px] font-medium text-[#475569] uppercase tracking-[0.12em] mb-1">
             Usuarios máx.
           </p>
           <div className="flex items-center gap-2">
@@ -429,7 +442,7 @@ const AdminTenantDetail = () => {
               </button>
             )}
           </div>
-          <p className="text-[10px] text-[#CBD5E1] mt-1">Límite real de usuarios de esta tienda</p>
+          <p className="text-[10px] text-[#64748B] mt-1">Límite real de usuarios de esta tienda</p>
         </div>
       </div>
 
@@ -442,7 +455,7 @@ const AdminTenantDetail = () => {
 
       <div className="flex flex-wrap items-center gap-3 mb-8">
         <div className="flex items-center gap-2">
-          <label className="text-[10px] text-[#94A3B8] uppercase tracking-[0.12em]">Plan</label>
+          <label className="text-[10px] text-[#475569] uppercase tracking-[0.12em]">Plan</label>
           <select
             value={displayPlan}
             onChange={(e) => {
@@ -506,9 +519,9 @@ const AdminTenantDetail = () => {
               const totalLimit = (tenant.maxUsers ?? 7) + (tenant.extraUsers ?? 0);
               const activeCount = tenant.users.filter((u) => u.isActive !== false).length;
               return (
-                <span className={`text-[11px] font-medium ${activeCount >= totalLimit ? 'text-red-500' : 'text-[#94A3B8]'}`}>
+                <span className={`text-[11px] font-medium ${activeCount >= totalLimit ? 'text-red-500' : 'text-[#475569]'}`}>
                   {activeCount} / {totalLimit}
-                  {tenant.extraUsers > 0 && <span className="text-[#CBD5E1]"> (+{tenant.extraUsers} add-on)</span>}
+                  {tenant.extraUsers > 0 && <span className="text-[#64748B]"> (+{tenant.extraUsers} add-on)</span>}
                 </span>
               );
             })()}
@@ -535,38 +548,89 @@ const AdminTenantDetail = () => {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-                <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Nombre</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Email</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Rol</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden lg:table-cell">Sucursal</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Alta</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Nombre</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden sm:table-cell">Email</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Rol</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden lg:table-cell">Sucursal</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Alta</th>
                 <th className="px-4 py-2.5" />
               </tr>
             </thead>
             <tbody>
               {tenant.users.map((u) => (
-                <tr key={u.id} className={`border-b border-[#E2E8F0] ${u.isActive === false ? 'opacity-40' : ''}`}>
-                  <td className="px-4 py-3 text-[#64748B]">{u.name}</td>
-                  <td className="px-4 py-3 text-[#94A3B8] hidden sm:table-cell">{u.email}</td>
-                  <td className="px-4 py-3 text-[#94A3B8] text-[12px]">{ROLE_LABELS[u.role] ?? u.role}</td>
-                  <td className="px-4 py-3 text-[#94A3B8] text-[12px] hidden lg:table-cell">
-                    {(tenant.tiendas ?? []).find((t) => t.id === u.tiendaId)?.name ?? '—'}
-                  </td>
-                  <td className="px-4 py-3 text-[#CBD5E1] text-[12px] hidden md:table-cell">{fmtDate(u.createdAt)}</td>
-                  <td className="px-4 py-3 text-right">
-                    {u.role !== 'OWNER' && u.isActive !== false && (
-                      <button
-                        onClick={() => {
-                          if (confirm(`¿Desactivar a ${u.name}?`)) deleteUserMutation.mutate(u.id);
-                        }}
-                        disabled={deleteUserMutation.isPending}
-                        className="text-[11px] text-red-400 hover:text-red-600 transition-colors disabled:opacity-40"
-                      >
-                        Eliminar
-                      </button>
-                    )}
-                  </td>
-                </tr>
+                <Fragment key={u.id}>
+                  <tr className={`border-b border-[#E2E8F0] ${u.isActive === false ? 'opacity-40' : ''}`}>
+                    <td className="px-4 py-3 text-[#64748B]">{u.name}</td>
+                    <td className="px-4 py-3 text-[#475569] hidden sm:table-cell">{u.email}</td>
+                    <td className="px-4 py-3 text-[#475569] text-[12px]">{ROLE_LABELS[u.role] ?? u.role}</td>
+                    <td className="px-4 py-3 text-[#475569] text-[12px] hidden lg:table-cell">
+                      {(tenant.tiendas ?? []).find((t) => t.id === u.tiendaId)?.name ?? '—'}
+                    </td>
+                    <td className="px-4 py-3 text-[#64748B] text-[12px] hidden md:table-cell">{fmtDate(u.createdAt)}</td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {u.isActive !== false && (
+                        <button
+                          onClick={() => {
+                            setResetUserId(resetUserId === u.id ? null : u.id);
+                            setResetValue('');
+                            setActionError('');
+                          }}
+                          className="text-[11px] text-violet-600 hover:text-violet-700 transition-colors mr-3"
+                        >
+                          Contraseña
+                        </button>
+                      )}
+                      {u.role !== 'OWNER' && u.isActive !== false && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`¿Desactivar a ${u.name}?`)) deleteUserMutation.mutate(u.id);
+                          }}
+                          disabled={deleteUserMutation.isPending}
+                          className="text-[11px] text-red-400 hover:text-red-600 transition-colors disabled:opacity-40"
+                        >
+                          Eliminar
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                  {resetUserId === u.id && (
+                    <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
+                      <td colSpan={6} className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[12px] text-[#64748B]">Nueva contraseña para {u.name}:</span>
+                          <input
+                            type="text"
+                            autoFocus
+                            placeholder="mín. 6 caracteres"
+                            value={resetValue}
+                            onChange={(e) => setResetValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && resetValue.length >= 6) {
+                                resetPasswordMutation.mutate({ userId: u.id, newPassword: resetValue });
+                              }
+                            }}
+                            className="w-48 bg-white border border-[#E2E8F0] rounded-lg px-3 py-1.5 text-[12px] text-[#0F172A]
+                              focus:outline-none focus:border-violet-400 transition-all"
+                          />
+                          <button
+                            onClick={() => resetPasswordMutation.mutate({ userId: u.id, newPassword: resetValue })}
+                            disabled={resetValue.length < 6 || resetPasswordMutation.isPending}
+                            className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700
+                              disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
+                          >
+                            {resetPasswordMutation.isPending ? 'Guardando...' : 'Guardar'}
+                          </button>
+                          <button
+                            onClick={() => { setResetUserId(null); setResetValue(''); }}
+                            className="text-[12px] text-[#64748B] hover:text-[#475569] transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -597,13 +661,13 @@ const AdminTenantDetail = () => {
         <div className="border border-[#E2E8F0] rounded-xl overflow-hidden mt-3 bg-white"
           style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
           {(tenant.tiendas ?? []).length === 0 ? (
-            <p className="text-center py-8 text-[#CBD5E1] text-[13px]">Sin sucursales registradas.</p>
+            <p className="text-center py-8 text-[#64748B] text-[13px]">Sin sucursales registradas.</p>
           ) : (
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Nombre</th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Dirección</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Nombre</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden sm:table-cell">Dirección</th>
                   <th className="px-4 py-2.5" />
                 </tr>
               </thead>
@@ -611,7 +675,7 @@ const AdminTenantDetail = () => {
                 {tenant.tiendas.map((t) => (
                   <tr key={t.id} className="border-b border-[#E2E8F0]">
                     <td className="px-4 py-3 text-[#64748B]">{t.name}</td>
-                    <td className="px-4 py-3 text-[#94A3B8] hidden sm:table-cell">{t.address ?? '—'}</td>
+                    <td className="px-4 py-3 text-[#475569] hidden sm:table-cell">{t.address ?? '—'}</td>
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => {
@@ -646,7 +710,7 @@ const AdminTenantDetail = () => {
               >
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <span className="text-[13px] text-[#64748B]">{mod.label}</span>
-                  <span className="text-[10px] text-[#CBD5E1] uppercase tracking-wide">{mod.plan.charAt(0) + mod.plan.slice(1).toLowerCase()}</span>
+                  <span className="text-[10px] text-[#64748B] uppercase tracking-wide">{mod.plan.charAt(0) + mod.plan.slice(1).toLowerCase()}</span>
                   {isAddon && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200">
                       Add-on +${mod.addonPrice}/mes
@@ -676,8 +740,8 @@ const AdminTenantDetail = () => {
           {Object.keys(totalByCurrency).length > 0 && (
             <div className="flex items-center gap-4">
               {Object.entries(totalByCurrency).map(([currency, byType]) => (
-                <span key={currency} className="text-[11px] text-[#94A3B8]">
-                  <span className="text-[#CBD5E1]">{currency}</span>{' '}
+                <span key={currency} className="text-[11px] text-[#475569]">
+                  <span className="text-[#64748B]">{currency}</span>{' '}
                   <span className="text-[#64748B] font-medium">
                     mensual {byType.MONTHLY.toFixed(2)} · impl. {byType.IMPLEMENTATION.toFixed(2)}
                   </span>
@@ -690,17 +754,17 @@ const AdminTenantDetail = () => {
         <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white"
           style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
           {payments.length === 0 ? (
-            <p className="text-center py-8 text-[#CBD5E1] text-[13px]">Sin pagos registrados.</p>
+            <p className="text-center py-8 text-[#64748B] text-[13px]">Sin pagos registrados.</p>
           ) : (
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Fecha</th>
-                  <th className="text-right px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Monto</th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Moneda</th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider">Tipo</th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden sm:table-cell">Notas</th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#94A3B8] uppercase tracking-wider hidden md:table-cell">Registrado</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Fecha</th>
+                  <th className="text-right px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Monto</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Moneda</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Tipo</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden sm:table-cell">Notas</th>
+                  <th className="text-left px-4 py-2.5 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Registrado</th>
                 </tr>
               </thead>
               <tbody>
@@ -718,8 +782,8 @@ const AdminTenantDetail = () => {
                     <td className="px-4 py-3 text-[#64748B] text-[12px]">
                       {PAYMENT_TYPE_LABELS[p.paymentType] ?? p.paymentType}
                     </td>
-                    <td className="px-4 py-3 text-[#94A3B8] text-[12px] hidden sm:table-cell">{p.notes ?? '—'}</td>
-                    <td className="px-4 py-3 text-[#CBD5E1] text-[11px] hidden md:table-cell">{fmtDateTime(p.createdAt)}</td>
+                    <td className="px-4 py-3 text-[#475569] text-[12px] hidden sm:table-cell">{p.notes ?? '—'}</td>
+                    <td className="px-4 py-3 text-[#64748B] text-[11px] hidden md:table-cell">{fmtDateTime(p.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -746,7 +810,7 @@ const AdminTenantDetail = () => {
           className={`px-5 py-2.5 rounded-xl text-[13px] font-semibold shadow-lg transition-all ${
             hasChanges && !saveMutation.isPending
               ? 'bg-violet-600 hover:bg-violet-700 text-white'
-              : 'bg-[#E2E8F0] text-[#94A3B8] cursor-not-allowed'
+              : 'bg-[#E2E8F0] text-[#475569] cursor-not-allowed'
           }`}
         >
           {saveMutation.isPending ? 'Guardando...' : 'Guardar cambios'}

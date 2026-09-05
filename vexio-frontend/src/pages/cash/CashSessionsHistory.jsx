@@ -25,7 +25,7 @@ const CashSessionsHistory = () => {
     <div className="px-6 pt-8 pb-16 max-w-[900px] mx-auto">
 
       <div className="flex items-center gap-3 mb-6">
-        <Link to="/cash" className="text-[#94A3B8] hover:text-[#64748B] transition-colors text-[13px]">← Caja</Link>
+        <Link to="/cash" className="text-[#475569] hover:text-[#64748B] transition-colors text-[13px]">← Caja</Link>
         <span className="text-[#E2E8F0]">/</span>
         <span className="text-[13px] text-[#64748B]">Historial de cajas</span>
       </div>
@@ -34,7 +34,7 @@ const CashSessionsHistory = () => {
         <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Historial de cajas</h1>
         {tiendas.length > 1 && (
           <div>
-            <label className="text-[10px] text-[#94A3B8] uppercase tracking-[0.12em] mr-2">Sucursal</label>
+            <label className="text-[10px] text-[#475569] uppercase tracking-[0.12em] mr-2">Sucursal</label>
             <select
               value={tiendaId}
               onChange={(e) => setTiendaId(e.target.value)}

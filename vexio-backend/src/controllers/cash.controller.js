@@ -76,6 +76,12 @@ const getActiveCurrencyCodes = async () => {
  * type=SESSION_OPEN — el saldo inicial ya no vive en columnas de CashSession.
  */
 const openCash = async (req, res) => {
+  // Declarado afuera del try (no con `const` adentro) a propósito: el catch
+  // de más abajo necesita leer tienda?.name para el mensaje del P2002, y una
+  // const/let declarada dentro de un bloque try no es visible en su catch
+  // (son bloques distintos) — venía así y un ReferenceError ahí adentro
+  // quedaba como unhandled rejection, reiniciando el proceso entero.
+  let tienda;
   try {
     const { tenantId, userId } = req.user;
     const { initialAmounts = {}, notes, tiendaId } = req.body;
@@ -83,7 +89,7 @@ const openCash = async (req, res) => {
     if (!tiendaId) {
       return res.status(400).json({ message: 'Falta indicar la sucursal donde se abre la caja.' });
     }
-    const tienda = await findTenantTienda(prisma, tenantId, tiendaId);
+    tienda = await findTenantTienda(prisma, tenantId, tiendaId);
     if (!tienda) {
       return res.status(400).json({ message: 'La sucursal indicada no pertenece a tu tienda.' });
     }
@@ -135,6 +141,16 @@ const openCash = async (req, res) => {
 
     res.status(201).json({ ...serializeSession(session), byCurrency });
   } catch (error) {
+    // El `findFirst` de arriba es solo el fast-path optimista — bajo dos
+    // aperturas concurrentes para la misma tienda, las dos pueden pasarlo
+    // antes de que cualquiera haya insertado su fila. La guarda real es el
+    // índice único parcial de DB (CashSession_tiendaId_open_unique, ver
+    // migración 20260905020000 y el comentario junto al modelo en
+    // schema.prisma): la segunda inserción concurrente choca con P2002 acá,
+    // en vez de crear una segunda sesión abierta para la misma sucursal.
+    if (error.code === 'P2002') {
+      return res.status(409).json({ message: `Ya hay una caja abierta en ${tienda?.name ?? 'esta sucursal'}.` });
+    }
     console.error('[cash:openCash]', error);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }

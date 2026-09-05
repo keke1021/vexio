@@ -1,6 +1,7 @@
 ﻿import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { X } from 'lucide-react';
 import api from '../../api/axios';
 
 const CURRENCIES = ['ARS', 'USD', 'USDT'];
@@ -107,7 +108,7 @@ const SuppliersOrderNew = () => {
   return (
     <div className="px-6 pt-8 pb-16 max-w-2xl mx-auto">
       <div className="flex items-center gap-3 mb-8">
-        <Link to={`/suppliers/${supplierId}`} className="text-[#94A3B8] hover:text-[#64748B] transition-colors text-[13px]">
+        <Link to={`/suppliers/${supplierId}`} className="text-[#475569] hover:text-[#64748B] transition-colors text-[13px]">
           ← {supplier?.name ?? 'Proveedor'}
         </Link>
         <span className="text-[#E2E8F0]">/</span>
@@ -124,7 +125,7 @@ const SuppliersOrderNew = () => {
           <div className="space-y-2">
             <div className="hidden sm:grid grid-cols-[1fr_80px_130px_32px] gap-2 px-1">
               {['Descripción', 'Cant.', 'Precio unit.', ''].map((h) => (
-                <p key={h} className="text-[10px] text-[#94A3B8] uppercase tracking-[0.12em]">{h}</p>
+                <p key={h} className="text-[10px] text-[#475569] uppercase tracking-[0.12em]">{h}</p>
               ))}
             </div>
 
@@ -161,9 +162,10 @@ const SuppliersOrderNew = () => {
                   type="button"
                   onClick={() => removeItem(idx)}
                   disabled={items.length === 1}
-                  className="text-[#CBD5E1] hover:text-red-400 transition-colors disabled:opacity-0 text-[18px] leading-none"
+                  className="text-[#64748B] hover:text-red-400 transition-colors disabled:opacity-0"
+                  aria-label="Quitar ítem"
                 >
-                  ×
+                  <X size={16} />
                 </button>
               </div>
             ))}
@@ -189,7 +191,7 @@ const SuppliersOrderNew = () => {
                 className={`px-4 py-2 rounded-lg text-[12px] font-bold border transition-all ${
                   currency === cur
                     ? 'text-white border-transparent'
-                    : 'bg-white border-[#E2E8F0] text-[#94A3B8] hover:text-[#64748B]'
+                    : 'bg-white border-[#E2E8F0] text-[#475569] hover:text-[#64748B]'
                 }`}
                 style={currency === cur ? { backgroundColor: '#1E3A5F' } : {}}
               >
@@ -245,7 +247,7 @@ const SuppliersOrderNew = () => {
                       className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${
                         downSource === opt.value
                           ? 'bg-[#3B82F6] text-white border-transparent'
-                          : 'bg-white border-[#E2E8F0] text-[#94A3B8] hover:text-[#64748B]'
+                          : 'bg-white border-[#E2E8F0] text-[#475569] hover:text-[#64748B]'
                       }`}
                     >
                       {opt.label}
@@ -280,7 +282,7 @@ const SuppliersOrderNew = () => {
               )}
 
               {downAmountNum > 0 && (
-                <p className="text-[12px] text-[#94A3B8] pt-1">
+                <p className="text-[12px] text-[#475569] pt-1">
                   Pendiente luego de la seña: <span className="font-medium text-[#64748B]">{fmtByCurrency(pending, currency)}</span>
                 </p>
               )}
@@ -316,7 +318,7 @@ const SuppliersOrderNew = () => {
           >
             {mutation.isPending ? 'Creando...' : 'Crear orden'}
           </button>
-          <Link to={`/suppliers/${supplierId}`} className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors">
+          <Link to={`/suppliers/${supplierId}`} className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors">
             Cancelar
           </Link>
         </div>

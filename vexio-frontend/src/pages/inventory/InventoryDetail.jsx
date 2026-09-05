@@ -37,7 +37,7 @@ const getMarginColor = (m) => {
 
 const Row = ({ label, children }) => (
   <div className="flex items-start justify-between py-3.5 border-b border-[#E2E8F0] last:border-0">
-    <span className="text-[12px] text-[#94A3B8] uppercase tracking-wider">{label}</span>
+    <span className="text-[12px] text-[#475569] uppercase tracking-wider">{label}</span>
     <span className="text-[13px] text-[#0F172A] text-right max-w-[60%]">{children}</span>
   </div>
 );
@@ -113,7 +113,7 @@ const InventoryDetail = () => {
 
   if (isError || !item) {
     return (
-      <div className="px-6 pt-12 text-center text-[#94A3B8] text-[13px]">
+      <div className="px-6 pt-12 text-center text-[#475569] text-[13px]">
         <p>Equipo no encontrado.</p>
         <Link to="/inventory" className="text-[#3B82F6] hover:underline mt-2 block">Volver al inventario</Link>
       </div>
@@ -126,7 +126,7 @@ const InventoryDetail = () => {
     <div className="px-6 pt-8 pb-16 max-w-xl mx-auto">
 
       <div className="flex items-center gap-3 mb-8">
-        <Link to="/inventory" className="text-[#94A3B8] hover:text-[#64748B] transition-colors text-[13px]">
+        <Link to="/inventory" className="text-[#475569] hover:text-[#64748B] transition-colors text-[13px]">
           ← Inventario
         </Link>
         <span className="text-[#E2E8F0]">/</span>
@@ -140,7 +140,7 @@ const InventoryDetail = () => {
           <span className={`text-[32px] font-bold leading-none ${getMarginColor(displayMargin)}`}>
             {displayMargin != null ? `${parseFloat(displayMargin).toFixed(1)}%` : '—'}
           </span>
-          <span className="text-[13px] text-[#94A3B8]">de margen</span>
+          <span className="text-[13px] text-[#475569]">de margen</span>
         </div>
       </div>
 
@@ -241,7 +241,7 @@ const InventoryDetail = () => {
               </button>
               <button
                 onClick={() => setIsEditing(false)}
-                className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors"
+                className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors"
               >
                 Cancelar
               </button>
@@ -278,7 +278,7 @@ const InventoryDetail = () => {
               </button>
               <button
                 onClick={() => setConfirmBaja(false)}
-                className="text-[12px] text-[#94A3B8] hover:text-[#64748B] transition-colors"
+                className="text-[12px] text-[#475569] hover:text-[#64748B] transition-colors"
               >
                 Cancelar
               </button>
@@ -288,15 +288,15 @@ const InventoryDetail = () => {
       )}
 
       <div className="mt-10 border-t border-[#E2E8F0] pt-6">
-        <p className="text-[11px] text-[#94A3B8] uppercase tracking-wider mb-3">Historial</p>
+        <p className="text-[11px] text-[#475569] uppercase tracking-wider mb-3">Historial</p>
         <div className="space-y-2">
           <div className="flex justify-between text-[12px]">
-            <span className="text-[#94A3B8]">Creado</span>
+            <span className="text-[#475569]">Creado</span>
             <span className="text-[#64748B]">{formatDateTime(item.createdAt)}</span>
           </div>
           {item.updatedAt !== item.createdAt && (
             <div className="flex justify-between text-[12px]">
-              <span className="text-[#94A3B8]">Última modificación</span>
+              <span className="text-[#475569]">Última modificación</span>
               <span className="text-[#64748B]">{formatDateTime(item.updatedAt)}</span>
             </div>
           )}

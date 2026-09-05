@@ -50,12 +50,12 @@ const Timeline = ({ history }) => (
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <StatusBadge status={entry.status} />
-                <span className="text-[11px] text-[#94A3B8]">{formatDateTime(entry.createdAt)}</span>
+                <span className="text-[11px] text-[#475569]">{formatDateTime(entry.createdAt)}</span>
               </div>
               {entry.notes && (
                 <p className="mt-1 text-[12px] text-[#64748B] italic">&ldquo;{entry.notes}&rdquo;</p>
               )}
-              <p className="mt-0.5 text-[11px] text-[#CBD5E1]">por {entry.changedBy?.name}</p>
+              <p className="mt-0.5 text-[11px] text-[#64748B]">por {entry.changedBy?.name}</p>
             </div>
           </div>
         );
@@ -83,7 +83,7 @@ const AdvancePanel = ({ repair, onAdvance, isLoading }) => {
 
   return (
     <div className="mt-8 border-t border-[#E2E8F0] pt-6">
-      <p className="text-[11px] text-[#94A3B8] uppercase tracking-wider mb-4">Avanzar estado</p>
+      <p className="text-[11px] text-[#475569] uppercase tracking-wider mb-4">Avanzar estado</p>
 
       <textarea
         value={note}
@@ -131,7 +131,7 @@ const AdvancePanel = ({ repair, onAdvance, isLoading }) => {
                 </button>
                 <button
                   onClick={() => setPendingTransition(null)}
-                  className="text-[12px] text-[#94A3B8] hover:text-[#64748B] transition-colors"
+                  className="text-[12px] text-[#475569] hover:text-[#64748B] transition-colors"
                 >
                   No
                 </button>
@@ -148,7 +148,7 @@ const AdvancePanel = ({ repair, onAdvance, isLoading }) => {
 
 const Row = ({ label, children }) => (
   <div className="flex justify-between items-start py-3 border-b border-[#E2E8F0] last:border-0">
-    <span className="text-[12px] text-[#94A3B8] uppercase tracking-wider shrink-0 mr-4">{label}</span>
+    <span className="text-[12px] text-[#475569] uppercase tracking-wider shrink-0 mr-4">{label}</span>
     <span className="text-[13px] text-[#0F172A] text-right">{children ?? '—'}</span>
   </div>
 );
@@ -208,7 +208,7 @@ const RepairsDetail = () => {
 
   if (isError || !repair) {
     return (
-      <div className="px-6 pt-12 text-center text-[#94A3B8] text-[13px]">
+      <div className="px-6 pt-12 text-center text-[#475569] text-[13px]">
         <p>Orden no encontrada.</p>
         <Link to="/repairs" className="text-[#3B82F6] hover:underline mt-2 block">Volver a reparaciones</Link>
       </div>
@@ -219,7 +219,7 @@ const RepairsDetail = () => {
     <div className="px-6 pt-8 pb-16 max-w-xl mx-auto">
 
       <div className="flex items-center gap-3 mb-8">
-        <Link to="/repairs" className="text-[#94A3B8] hover:text-[#64748B] transition-colors text-[13px]">← Reparaciones</Link>
+        <Link to="/repairs" className="text-[#475569] hover:text-[#64748B] transition-colors text-[13px]">← Reparaciones</Link>
         <span className="text-[#E2E8F0]">/</span>
         <span className="font-mono text-[12px] text-[#64748B]">ORD-{refId(repair.id)}</span>
       </div>
@@ -227,7 +227,7 @@ const RepairsDetail = () => {
       <div className="mb-8">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[12px] text-[#94A3B8] font-mono mb-1">ORD-{refId(repair.id)}</p>
+            <p className="text-[12px] text-[#475569] font-mono mb-1">ORD-{refId(repair.id)}</p>
             <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">{repair.customerName}</h1>
             <p className="text-[14px] text-[#64748B] mt-1">{repair.deviceModel}{repair.deviceColor ? ` · ${repair.deviceColor}` : ''}</p>
           </div>
@@ -254,7 +254,7 @@ const RepairsDetail = () => {
       {canEdit && !isEditing && (
         <button
           onClick={startEdit}
-          className="mb-5 text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors"
+          className="mb-5 text-[13px] text-[#475569] hover:text-[#64748B] transition-colors"
         >
           Editar datos →
         </button>
@@ -323,7 +323,7 @@ const RepairsDetail = () => {
               >
                 {updateMutation.isPending ? 'Guardando...' : 'Guardar'}
               </button>
-              <button onClick={() => setIsEditing(false)} className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors">
+              <button onClick={() => setIsEditing(false)} className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors">
                 Cancelar
               </button>
             </div>
@@ -333,7 +333,7 @@ const RepairsDetail = () => {
 
       {repair.statusHistory?.length > 0 && (
         <div className="mb-2">
-          <p className="text-[11px] text-[#94A3B8] uppercase tracking-wider mb-5">Historial</p>
+          <p className="text-[11px] text-[#475569] uppercase tracking-wider mb-5">Historial</p>
           <Timeline history={repair.statusHistory} />
         </div>
       )}
@@ -345,7 +345,7 @@ const RepairsDetail = () => {
       />
 
       <div className="mt-10 border-t border-[#E2E8F0] pt-5">
-        <p className="text-[12px] text-[#CBD5E1]">
+        <p className="text-[12px] text-[#64748B]">
           Creada el {formatDateTime(repair.createdAt)}
         </p>
       </div>

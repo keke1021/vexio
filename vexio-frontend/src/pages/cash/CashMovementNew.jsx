@@ -89,7 +89,7 @@ const CashMovementNew = () => {
   return (
     <div className="px-6 pt-8 pb-16 max-w-lg mx-auto">
       <div className="flex items-center gap-3 mb-8">
-        <Link to="/cash" className="text-[#94A3B8] hover:text-[#64748B] transition-colors text-[13px]">← Caja</Link>
+        <Link to="/cash" className="text-[#475569] hover:text-[#64748B] transition-colors text-[13px]">← Caja</Link>
         <span className="text-[#E2E8F0]">/</span>
         <span className="text-[13px] text-[#64748B]">Nuevo movimiento</span>
       </div>
@@ -122,15 +122,15 @@ const CashMovementNew = () => {
         )}
 
         {tiendas.length === 1 && tiendaActual && (
-          <p className="text-[12px] text-[#94A3B8]">Sucursal: <span className="text-[#64748B] font-medium">{tiendaActual.name}</span></p>
+          <p className="text-[12px] text-[#475569]">Sucursal: <span className="text-[#64748B] font-medium">{tiendaActual.name}</span></p>
         )}
 
         <div>
           <Label required>Tipo</Label>
           <div className="flex gap-3">
             {[
-              { value: 'INCOME',  label: 'Ingreso',  active: 'border-emerald-400 bg-emerald-50 text-emerald-600', inactive: 'border-[#E2E8F0] bg-white text-[#94A3B8]' },
-              { value: 'EXPENSE', label: 'Egreso',   active: 'border-red-400 bg-red-50 text-red-500', inactive: 'border-[#E2E8F0] bg-white text-[#94A3B8]' },
+              { value: 'INCOME',  label: 'Ingreso',  active: 'border-emerald-400 bg-emerald-50 text-emerald-600', inactive: 'border-[#E2E8F0] bg-white text-[#475569]' },
+              { value: 'EXPENSE', label: 'Egreso',   active: 'border-red-400 bg-red-50 text-red-500', inactive: 'border-[#E2E8F0] bg-white text-[#475569]' },
             ].map((opt) => (
               <button
                 key={opt.value}
@@ -168,7 +168,7 @@ const CashMovementNew = () => {
                   className={`px-3 py-2 rounded-lg text-[12px] font-bold border transition-all ${
                     form.currencyCode === cur
                       ? 'text-white border-transparent'
-                      : 'bg-white border-[#E2E8F0] text-[#94A3B8] hover:text-[#64748B]'
+                      : 'bg-white border-[#E2E8F0] text-[#475569] hover:text-[#64748B]'
                   }`}
                   style={form.currencyCode === cur ? { backgroundColor: '#1E3A5F' } : {}}
                 >
@@ -215,7 +215,7 @@ const CashMovementNew = () => {
           >
             {mutation.isPending ? 'Guardando...' : 'Registrar'}
           </button>
-          <Link to="/cash" className="text-[13px] text-[#94A3B8] hover:text-[#64748B] transition-colors">Cancelar</Link>
+          <Link to="/cash" className="text-[13px] text-[#475569] hover:text-[#64748B] transition-colors">Cancelar</Link>
         </div>
       </form>
     </div>

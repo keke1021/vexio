@@ -512,6 +512,36 @@ const updateTenantUser = async (req, res) => {
 };
 
 /**
+ * PUT /api/admin/tenants/:id/users/:userId/password
+ * Resetea la contraseña de un usuario de una tienda. Único camino existente
+ * para recuperar acceso cuando un usuario olvidó su contraseña — el sistema
+ * no tiene flujo de "olvidé mi contraseña" (ni self-service ni por email),
+ * así que esto lo hace SUPERADMIN a mano desde el panel de admin. No exige
+ * la contraseña actual (a diferencia de PUT /auth/password, que sí).
+ */
+const resetTenantUserPassword = async (req, res) => {
+  try {
+    const { id: tenantId, userId } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres.' });
+    }
+
+    const user = await prisma.user.findFirst({ where: { id: userId, tenantId } });
+    if (!user) return res.status(404).json({ message: 'Usuario no encontrado.' });
+
+    const hashed = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
+
+    res.json({ message: 'Contraseña actualizada correctamente.' });
+  } catch (error) {
+    console.error('[admin:resetTenantUserPassword]', error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+/**
  * DELETE /api/admin/tenants/:id/users/:userId
  * Desactiva un usuario de una tienda. No permite eliminar el último OWNER.
  */
@@ -761,7 +791,7 @@ const getExpiringTenants = async (req, res) => {
 
 module.exports = {
   createTenant, getTenants, getTenantById, updateTenant, getStats, registerPayment, getPayments, getBillingReport,
-  createTenantUser, updateTenantUser, deleteTenantUser, getExpiringTenants,
+  createTenantUser, updateTenantUser, deleteTenantUser, resetTenantUserPassword, getExpiringTenants,
   updateModules, addModuleAddon,
   getTiendas, createTienda, updateTienda, deleteTienda,
 };

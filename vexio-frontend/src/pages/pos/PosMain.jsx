@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { X, AlertTriangle, ChevronUp, ChevronDown, Receipt, Clock, User } from 'lucide-react';
 import api from '../../api/axios';
 
 const PAYMENT_METHODS = [
@@ -9,6 +10,8 @@ const PAYMENT_METHODS = [
   { value: 'CARD',         label: 'Tarjeta'       },
   { value: 'INSTALLMENTS', label: 'Cuotas'        },
 ];
+
+const RECENT_SALES_LIMIT = 6;
 
 const formatCurrency = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
@@ -20,6 +23,9 @@ const fmtByCurrency = (n, cur) => (cur === 'ARS' ? formatCurrency(n) : fmtGeneri
 
 const formatRate = (n) =>
   n != null ? new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(n) : '—';
+
+const formatSaleTime = (d) =>
+  new Date(d).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 
 // ─── Conversión (preview del carrito — el backend es la fuente de verdad) ─────
 //
@@ -87,22 +93,59 @@ const ResultCard = ({ item, onAdd, inCart, rates }) => {
           <p className="text-[14px] font-medium text-[#0F172A] truncate">
             {item.product.name} · {item.product.color} · {item.product.storage}
           </p>
-          <p className="font-mono text-[11px] text-[#94A3B8] mt-0.5">{item.imei}</p>
+          <p className="font-mono text-[11px] text-[#475569] mt-0.5">{item.imei}</p>
           {item.supplier && (
-            <p className="text-[11px] text-[#CBD5E1] mt-1">{item.supplier.name}</p>
+            <p className="text-[11px] text-[#64748B] mt-1">{item.supplier.name}</p>
           )}
         </div>
         <div className="text-right shrink-0">
           <p className="text-[15px] font-bold text-[#0F172A]">{primaryFmt}</p>
           {dualLine && (
-            <p className="text-[11px] text-[#94A3B8] mt-0.5">{dualLine}</p>
+            <p className="text-[11px] text-[#475569] mt-0.5">{dualLine}</p>
           )}
-          <p className="text-[11px] text-[#94A3B8] mt-0.5">{item.margin?.toFixed(1)}% margen</p>
+          <p className="text-[11px] text-[#475569] mt-0.5">{item.margin?.toFixed(1)}% margen</p>
         </div>
       </div>
       {inCart && (
         <p className="mt-2 text-[11px] text-[#3B82F6]">Ya está en el carrito</p>
       )}
+    </button>
+  );
+};
+
+// ─── Recent Sale Card (estado vacío del buscador) ──────────────────────────────
+// Llena el hueco que antes quedaba con un único texto centrado. `sale.items`
+// viene del detalle (GET /pos/sales/:id, mismo endpoint que PosSaleDetail.jsx)
+// — el listado (GET /pos/sales) no trae el modelo, solo la cantidad de ítems.
+
+const RecentSaleCard = ({ sale, onClick }) => {
+  const firstProduct = sale.items?.[0]?.inventoryItem?.product;
+  const itemCount = sale.items?.length ?? sale._count?.items ?? 1;
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left border border-[#E2E8F0] bg-white rounded-xl p-3.5 transition-all
+        hover:border-[#3B82F6]/50 hover:bg-[#EFF6FF]"
+      style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[13px] font-medium text-[#0F172A] truncate min-w-0">
+          {firstProduct
+            ? `${firstProduct.name} ${firstProduct.storage ?? ''}`.trim()
+            : `${itemCount} equipo${itemCount !== 1 ? 's' : ''}`}
+          {itemCount > 1 && firstProduct && (
+            <span className="text-[#475569] font-normal"> +{itemCount - 1}</span>
+          )}
+        </p>
+        <p className="text-[13px] font-bold text-[#0F172A] shrink-0">
+          {fmtByCurrency(sale.total, sale.currencyCode)}
+        </p>
+      </div>
+      <div className="flex items-center gap-3 mt-1.5 text-[11px] text-[#475569]">
+        <span className="inline-flex items-center gap-1"><Clock size={11} />{formatSaleTime(sale.createdAt)}</span>
+        <span className="inline-flex items-center gap-1 truncate"><User size={11} className="shrink-0" />{sale.seller?.name ?? '—'}</span>
+      </div>
     </button>
   );
 };
@@ -135,7 +178,7 @@ const CartItem = ({ entry, displayPrice, currency, onRemove, onSetPrice }) => {
         <p className="text-[13px] text-[#0F172A] truncate">
           {entry.item.product.name} {entry.item.product.storage}
         </p>
-        <p className="font-mono text-[11px] text-[#94A3B8] mt-0.5">{entry.item.imei}</p>
+        <p className="font-mono text-[11px] text-[#475569] mt-0.5">{entry.item.imei}</p>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         {editing ? (
@@ -161,7 +204,7 @@ const CartItem = ({ entry, displayPrice, currency, onRemove, onSetPrice }) => {
             </span>
             <button
               onClick={startEdit}
-              className="text-[#CBD5E1] hover:text-[#64748B] transition-colors"
+              className="text-[#64748B] hover:text-[#64748B] transition-colors"
               title="Editar precio"
             >
               <PencilIcon />
@@ -170,10 +213,10 @@ const CartItem = ({ entry, displayPrice, currency, onRemove, onSetPrice }) => {
         )}
         <button
           onClick={() => onRemove(entry.item.id)}
-          className="text-[#CBD5E1] hover:text-red-400 transition-colors text-[16px] leading-none ml-1"
+          className="text-[#64748B] hover:text-red-400 transition-colors ml-1"
           title="Quitar"
         >
-          ×
+          <X size={15} />
         </button>
       </div>
     </div>
@@ -249,7 +292,7 @@ const RatesWidget = ({ rates }) => {
             <span className="text-[11px] text-white/40">Cotizaciones no disponibles</span>
           )}
         </div>
-        <span className="text-[11px] text-white/50">{expanded ? '▲' : '▼'}</span>
+        <span className="text-white/50">{expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</span>
       </button>
 
       {expanded && (
@@ -353,6 +396,25 @@ const PosMain = () => {
   // "cotización no disponible" y el pie de página del total) — el precio
   // real de cada item usa su propio par vía resolveRate.
   const activeRate = saleCurrency !== 'ARS' ? resolveRate(rates, saleCurrency, 'ARS') : null;
+
+  // ─── Últimas ventas (rellena el estado vacío del buscador) ─────────────────
+  // Reusa GET /pos/sales (mismo que PosSales.jsx) para el listado y GET
+  // /pos/sales/:id (mismo que PosSaleDetail.jsx) para el detalle de cada una
+  // — el listado no trae el modelo vendido, solo la cantidad de ítems. Sin
+  // endpoints nuevos ni lógica de backend nueva: son como máximo 6 pedidos,
+  // una sola vez al entrar al POS sin nada buscado.
+  const { data: recentSales = [] } = useQuery({
+    queryKey: ['pos-recent-sales'],
+    queryFn: async () => {
+      const { data } = await api.get('/pos/sales', { params: { limit: RECENT_SALES_LIMIT } });
+      const list = data?.sales ?? [];
+      return Promise.all(
+        list.map((s) => api.get(`/pos/sales/${s.id}`).then((r) => r.data).catch(() => s))
+      );
+    },
+    staleTime: 30_000,
+    throwOnError: false,
+  });
 
   // ─── Price helpers ────────────────────────────────────────────────────────
   // cart entry: { item, baseSalePrice (en item.currencyCode), manualPrice (null | number en saleCurrency) }
@@ -493,7 +555,7 @@ const PosMain = () => {
         <div className="p-5 border-b border-[#E2E8F0] bg-white">
           {tiendas.length > 1 && (
             <div className="mb-3">
-              <label className="text-[10px] text-[#94A3B8] uppercase tracking-[0.12em] mr-2">Sucursal</label>
+              <label className="text-[10px] text-[#475569] uppercase tracking-[0.12em] mr-2">Sucursal</label>
               <select
                 value={tiendaId}
                 onChange={(e) => setSearchParams({ tiendaId: e.target.value })}
@@ -513,7 +575,7 @@ const PosMain = () => {
             </p>
           )}
           {tiendas.length > 1 && !tiendaId && (
-            <p className="mb-3 text-[12px] text-[#94A3B8]">Elegí una sucursal arriba para poder vender.</p>
+            <p className="mb-3 text-[12px] text-[#475569]">Elegí una sucursal arriba para poder vender.</p>
           )}
           <div className="relative">
             <input
@@ -530,14 +592,14 @@ const PosMain = () => {
               <div className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 rounded-full border-2 border-[#E2E8F0] border-t-[#3B82F6] animate-spin" />
             )}
           </div>
-          <p className="mt-2 text-[11px] text-[#CBD5E1]">
-            Ingresá el IMEI con el lector · <kbd className="text-[#94A3B8]">Enter</kbd> para agregar · <kbd className="text-[#94A3B8]">Esc</kbd> para limpiar
+          <p className="mt-2 text-[11px] text-[#64748B]">
+            Ingresá el IMEI con el lector · <kbd className="text-[#475569]">Enter</kbd> para agregar · <kbd className="text-[#475569]">Esc</kbd> para limpiar
           </p>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-2">
           {debouncedQ.length >= 2 && !isFetching && results.length === 0 && (
-            <p className="text-center py-12 text-[13px] text-[#CBD5E1]">
+            <p className="text-center py-12 text-[13px] text-[#64748B]">
               No hay equipos disponibles para &ldquo;{debouncedQ}&rdquo;
             </p>
           )}
@@ -545,9 +607,24 @@ const PosMain = () => {
             <ResultCard key={item.id} item={item} onAdd={addToCart} inCart={cartIds.has(item.id)} rates={rates} />
           ))}
           {!debouncedQ && (
-            <div className="flex flex-col items-center justify-center h-full py-20 text-center">
-              <p className="text-[13px] text-[#CBD5E1]">Buscá o escaneá un equipo para comenzar</p>
-            </div>
+            recentSales.length > 0 ? (
+              <div className="py-2">
+                <p className="text-center text-[13px] text-[#64748B] mb-6 mt-4">Buscá o escaneá un equipo para comenzar</p>
+                <div className="flex items-center gap-1.5 mb-3 px-0.5">
+                  <Receipt size={13} className="text-[#475569]" />
+                  <p className="text-[11px] font-medium text-[#475569] uppercase tracking-wider">Últimas ventas</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {recentSales.map((sale) => (
+                    <RecentSaleCard key={sale.id} sale={sale} onClick={() => navigate(`/pos/sales/${sale.id}`)} />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full py-20 text-center">
+                <p className="text-[13px] text-[#64748B]">Buscá o escaneá un equipo para comenzar</p>
+              </div>
+            )
           )}
         </div>
 
@@ -566,7 +643,7 @@ const PosMain = () => {
             Carrito {cart.length > 0 && <span className="text-[#3B82F6]">({cart.length})</span>}
           </h2>
           {cart.length > 0 && (
-            <button onClick={() => setCart([])} className="text-[11px] text-[#94A3B8] hover:text-red-400 transition-colors">
+            <button onClick={() => setCart([])} className="text-[11px] text-[#475569] hover:text-red-400 transition-colors">
               Limpiar
             </button>
           )}
@@ -574,7 +651,7 @@ const PosMain = () => {
 
         <div className="max-h-[45vh] overflow-y-auto px-5 py-3 bg-white">
           {cart.length === 0 ? (
-            <p className="text-center py-12 text-[12px] text-[#CBD5E1]">El carrito está vacío</p>
+            <p className="text-center py-12 text-[12px] text-[#64748B]">El carrito está vacío</p>
           ) : (
             cart.map((entry) => (
               <CartItem
@@ -595,24 +672,25 @@ const PosMain = () => {
           {/* Total + TC info */}
           <div>
             <div className="flex items-baseline justify-between">
-              <span className="text-[12px] text-[#94A3B8] uppercase tracking-wider">Total</span>
+              <span className="text-[12px] text-[#475569] uppercase tracking-wider">Total</span>
               <span className="text-[24px] font-bold text-[#0F172A]">{fmtByCurrency(total, saleCurrency)}</span>
             </div>
             {saleCurrency !== 'ARS' && activeRate && (
-              <p className="text-[11px] text-[#94A3B8] text-right mt-0.5">
+              <p className="text-[11px] text-[#475569] text-right mt-0.5">
                 TC {saleCurrency === 'USDT' ? 'USDT (Binance)' : 'Blue'}: ${Math.round(activeRate).toLocaleString('es-AR')}
               </p>
             )}
             {noRateWarn && (
-              <p className="text-[11px] text-amber-500 mt-1">
-                ⚠ Cotización {saleCurrency} no disponible — precios sin convertir
+              <p className="text-[11px] text-amber-500 mt-1 flex items-start gap-1">
+                <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                <span>Cotización {saleCurrency} no disponible — precios sin convertir</span>
               </p>
             )}
           </div>
 
           {/* Medio de pago */}
           <div>
-            <p className="text-[10px] text-[#94A3B8] uppercase tracking-wider mb-2">Medio de pago</p>
+            <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-2">Medio de pago</p>
             <div className="grid grid-cols-2 gap-1.5">
               {PAYMENT_METHODS.map((pm) => (
                 <button
@@ -632,7 +710,7 @@ const PosMain = () => {
 
           {/* Moneda */}
           <div>
-            <p className="text-[10px] text-[#94A3B8] uppercase tracking-wider mb-2">Moneda de la venta</p>
+            <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-2">Moneda de la venta</p>
             <div className="flex gap-1.5">
               {['ARS', 'USD', 'USDT'].map((cur) => (
                 <button
@@ -658,9 +736,10 @@ const PosMain = () => {
           <div>
             <button
               onClick={() => setShowCustomer(!showCustomer)}
-              className="text-[11px] text-[#94A3B8] hover:text-[#64748B] transition-colors"
+              className="inline-flex items-center gap-1 text-[11px] text-[#475569] hover:text-[#64748B] transition-colors"
             >
-              {showCustomer ? '↑ Ocultar' : '+ Agregar'} cliente
+              {showCustomer ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {showCustomer ? 'Ocultar' : 'Agregar'} cliente
             </button>
             {showCustomer && (
               <div className="mt-2 space-y-2">
@@ -701,7 +780,7 @@ const PosMain = () => {
             className={`w-full py-3.5 rounded-xl text-[14px] font-bold transition-all ${
               canConfirm && !saleMutation.isPending
                 ? 'bg-[#3B82F6] hover:bg-[#2563EB] text-white'
-                : 'bg-[#F1F5F9] text-[#CBD5E1] cursor-not-allowed'
+                : 'bg-[#F1F5F9] text-[#64748B] cursor-not-allowed'
             }`}
           >
             {saleMutation.isPending ? 'Procesando...' : 'Confirmar venta'}
@@ -709,7 +788,7 @@ const PosMain = () => {
 
           <Link
             to="/pos/sales"
-            className="block text-center text-[12px] text-[#94A3B8] hover:text-[#64748B] transition-colors"
+            className="block text-center text-[12px] text-[#475569] hover:text-[#64748B] transition-colors"
           >
             Ver historial →
           </Link>

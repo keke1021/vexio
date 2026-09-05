@@ -10,7 +10,7 @@ const STATUS_CONFIG = {
 };
 
 const PRIORITY_CONFIG = {
-  BAJA:  { label: 'Baja',  cls: 'text-[#94A3B8]' },
+  BAJA:  { label: 'Baja',  cls: 'text-[#475569]' },
   MEDIA: { label: 'Media', cls: 'text-amber-600' },
   ALTA:  { label: 'Alta',  cls: 'text-red-500' },
 };
@@ -27,7 +27,7 @@ const fmtDate = (d) =>
   new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 const Badge = ({ config, value }) => {
-  const cfg = config[value] ?? { label: value, cls: 'text-[#94A3B8] bg-[#F1F5F9]' };
+  const cfg = config[value] ?? { label: value, cls: 'text-[#475569] bg-[#F1F5F9]' };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${cfg.cls}`}>
       {cfg.label}
@@ -62,7 +62,7 @@ const TicketsList = () => {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Soporte</h1>
-          <p className="text-[13px] text-[#94A3B8] mt-1">Tus tickets de soporte técnico.</p>
+          <p className="text-[13px] text-[#475569] mt-1">Tus tickets de soporte técnico.</p>
         </div>
         <Link
           to="/tickets/new"
@@ -94,10 +94,10 @@ const TicketsList = () => {
       </div>
 
       {isLoading ? (
-        <p className="text-[#CBD5E1] text-[13px]">Cargando...</p>
+        <p className="text-[#64748B] text-[13px]">Cargando...</p>
       ) : tickets.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-[#CBD5E1] text-[14px]">No hay tickets.</p>
+          <p className="text-[#64748B] text-[14px]">No hay tickets.</p>
           <Link to="/tickets/new" className="text-[13px] text-[#3B82F6] hover:text-[#2563EB] mt-3 inline-block transition-colors">
             Crear el primero →
           </Link>
@@ -114,7 +114,7 @@ const TicketsList = () => {
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-[14px] font-medium text-[#0F172A] truncate">{t.title}</p>
-                  <p className="text-[12px] text-[#94A3B8] mt-0.5">
+                  <p className="text-[12px] text-[#475569] mt-0.5">
                     {CATEGORY_LABELS[t.category] ?? t.category}
                     {t._count?.replies > 0 && (
                       <span className="ml-2 text-[#3B82F6]">· {t._count.replies} respuesta{t._count.replies !== 1 ? 's' : ''}</span>
@@ -122,13 +122,13 @@ const TicketsList = () => {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className={`text-[11px] font-medium ${PRIORITY_CONFIG[t.priority]?.cls ?? 'text-[#94A3B8]'}`}>
+                  <span className={`text-[11px] font-medium ${PRIORITY_CONFIG[t.priority]?.cls ?? 'text-[#475569]'}`}>
                     {PRIORITY_CONFIG[t.priority]?.label ?? t.priority}
                   </span>
                   <Badge config={STATUS_CONFIG} value={t.status} />
                 </div>
               </div>
-              <p className="text-[11px] text-[#CBD5E1] mt-2">{fmtDate(t.createdAt)}</p>
+              <p className="text-[11px] text-[#64748B] mt-2">{fmtDate(t.createdAt)}</p>
             </Link>
           ))}
         </div>
