@@ -49,6 +49,7 @@ model Tenant {
   ledgerEntries    LedgerEntry[]
   conversions      Conversion[]
   stockTransfers   StockTransfer[]
+  deliveries       Delivery[]
   supplierPayments SupplierPayment[]
 }
 
@@ -92,7 +93,11 @@ model User {
 
   // Sucursal a la que pertenece este usuario. Opcional — un usuario sin
   // tiendaId asignada no está atado a ninguna sucursal en particular.
-  // Etapa actual: solo asignación informativa, no filtra stock/caja/ventas.
+  // No filtra stock/caja/ventas (POS, Caja, Compras siguen sin restringir por
+  // tienda del usuario). ÚNICA excepción: StockTransfer sí lo usa como
+  // autorización real — ver assertTiendaAccess en utils/tiendaAuth.js. Un
+  // SELLER/TECH sin tiendaId asignada queda bloqueado de ese módulo (fail
+  // closed), OWNER/ADMIN/SUPERADMIN no están sujetos a esta restricción.
   tiendaId String?
   tienda   Tienda? @relation(fields: [tiendaId], references: [id])
 
@@ -110,8 +115,12 @@ model User {
   ledgerEntries LedgerEntry[]
   conversions   Conversion[]
 
+  stockTransfersCreated    StockTransfer[] @relation("StockTransferCreator")
   stockTransfersDispatched StockTransfer[] @relation("StockTransferDispatcher")
-  stockTransfersReceived   StockTransfer[] @relation("StockTransferReceiver")
+
+  stockTransferItemsAdded     StockTransferItem[] @relation("StockTransferItemAdder")
+  stockTransferItemsReceived  StockTransferItem[] @relation("StockTransferItemReceiver")
+  stockTransferItemsCancelled StockTransferItem[] @relation("StockTransferItemCanceller")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -390,7 +399,11 @@ enum ItemStatus {
   SOLD
   RESERVED
   DEFECTIVE
-  IN_TRANSIT // poblado mientras currentTransferId apunta a un StockTransfer sin recibir
+  // Poblado desde que el ítem se agrega a un lote de StockTransfer (todavía
+  // EN_PREPARACION, ni siquiera despachado) hasta que se confirma su
+  // recepción en destino — currentTransferId apunta al lote mientras tanto.
+  // Ver StockTransferItem para el detalle del estado dentro del lote.
+  IN_TRANSIT
 }
 
 model InventoryItem {
@@ -423,10 +436,17 @@ model InventoryItem {
   tiendaId String
   tienda   Tienda @relation(fields: [tiendaId], references: [id])
 
-  // Poblado solo mientras status=IN_TRANSIT — el StockTransfer que está
-  // moviendo este item entre sucursales. Null en cualquier otro estado.
+  // Poblado solo mientras status=IN_TRANSIT — el lote (StockTransfer) donde
+  // el ítem está actualmente EN_PREPARACION o EN_CAMINO. Null en cualquier
+  // otro estado.
   currentTransferId String?
   currentTransfer   StockTransfer? @relation(fields: [currentTransferId], references: [id])
+
+  // Historial completo de membresías en lotes de transferencia — a
+  // diferencia de currentTransferId (solo la vigente), acá queda cada paso
+  // por el que pasó el ítem a lo largo de su vida, incluidos los ya
+  // resueltos (RECEIVED/CANCELLED).
+  transferMemberships StockTransferItem[]
 
   saleItems SaleItem[]
 
@@ -460,23 +480,61 @@ model Supplier {
 }
 
 // ─── Transferencias entre sucursales ──────────────────────────────────────────
-// Mueve InventoryItem de una Tienda a otra. Mientras el traslado está en
-// curso (status=IN_TRANSIT) el/los InventoryItem trasladados tienen
-// status=IN_TRANSIT y currentTransferId apuntando a esta fila — no
-// pertenecen ni al stock de origen ni al de destino hasta que se confirma
-// la recepción (receivedById + receivedAt poblados, status=RECEIVED), momento
-// en el que InventoryItem.tiendaId pasa a ser toTiendaId y vuelve a
-// status=AVAILABLE. Lógica de transición NO implementada todavía (próxima
-// etapa) — este modelo es solo el shape de datos.
-enum TransferStatus {
-  IN_TRANSIT
-  RECEIVED
-  CANCELLED
+// Un lote (StockTransfer) se arma incrementalmente durante el día: cada IMEI
+// agregado pasa de inmediato a InventoryItem.status=IN_TRANSIT (no vendible
+// en el origen, aunque el camión no haya salido) y suma un StockTransferItem
+// propio con su propio ciclo de vida. Al cerrar y despachar el lote
+// (OPEN→DISPATCHED) se exige un Delivery asociado; a partir de ahí no se
+// pueden agregar más ítems. El destino puede aceptar todo el lote de una
+// (receive-all) o ítem por ítem (recepción parcial); lo no recibido queda
+// DISPATCHED hasta que alguien lo reciba o lo cancele con motivo. Un ítem ya
+// RECEIVED no se cancela — eso se resuelve con una transferencia inversa.
+//
+// StockTransfer.status es un campo propio (no derivado en cada lectura), pero
+// se recalcula transaccionalmente en cada mutación que puede afectarlo
+// (dispatch, receive, receive-all, cancel) — nunca se pisa "a mano" desde
+// otro lado. El auto-cierre a CLOSED solo aplica sobre lotes ya DISPATCHED:
+// cancelar el último ítem de un lote todavía OPEN lo deja OPEN y vacío, listo
+// para seguir sumando ítems ese mismo día, no lo cierra.
+enum StockTransferStatus {
+  OPEN       // lote en armado (EN_PREPARACION) — se le pueden seguir agregando ítems
+  DISPATCHED // cerrado + delivery asignado + salió físicamente (EN_CAMINO)
+  CLOSED     // terminal: todos sus ítems están en RECEIVED o CANCELLED
+}
+
+enum StockTransferItemStatus {
+  PREPARING  // agregado al lote, todavía no despachado (EN_PREPARACION)
+  DISPATCHED // el lote salió, este ítem viaja (EN_CAMINO)
+  RECEIVED   // confirmado en destino — InventoryItem pasa a AVAILABLE en destino
+  CANCELLED  // perdido/dañado/error de carga — requiere cancelReason
+}
+
+// Catálogo de fleteros/transportistas, reutilizable entre despachos — mismo
+// patrón que Supplier (scoped por tenant, alta rápida desde el flujo que lo
+// necesita). A diferencia de Supplier, sin @@unique([name, tenantId]): puede
+// haber dos fleteros con el mismo nombre sin ser la misma persona — la UI
+// resuelve "reusar o crear nuevo" con un selector, no con una constraint que
+// asuma nombres únicos.
+model Delivery {
+  id       String  @id @default(cuid())
+  name     String
+  phone    String
+  isActive Boolean @default(true)
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  transfers StockTransfer[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
 }
 
 model StockTransfer {
-  id     String         @id @default(cuid())
-  status TransferStatus @default(IN_TRANSIT)
+  id     String              @id @default(cuid())
+  status StockTransferStatus @default(OPEN)
 
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id])
@@ -486,24 +544,75 @@ model StockTransfer {
   toTiendaId   String
   toTienda     Tienda @relation("StockTransferTo", fields: [toTiendaId], references: [id])
 
-  // Items trasladados por este movimiento (solo mientras están IN_TRANSIT
-  // apuntan acá vía InventoryItem.currentTransferId — ver comentario ahí).
-  items InventoryItem[]
+  // Nullable hasta el dispatch — obligatorio asociar uno antes de esa
+  // transición (OPEN→DISPATCHED), validado en el controller.
+  deliveryId String?
+  delivery   Delivery? @relation(fields: [deliveryId], references: [id])
 
-  dispatchedById String
-  dispatchedBy   User   @relation("StockTransferDispatcher", fields: [dispatchedById], references: [id])
+  // Quien agregó el primer ítem — abrió el lote de forma implícita, no hay
+  // una acción explícita de "crear lote vacío".
+  createdById String
+  createdBy   User   @relation("StockTransferCreator", fields: [createdById], references: [id])
 
-  receivedById String?
-  receivedBy   User?   @relation("StockTransferReceiver", fields: [receivedById], references: [id])
+  dispatchedById String?
+  dispatchedBy   User?     @relation("StockTransferDispatcher", fields: [dispatchedById], references: [id])
+  dispatchedAt   DateTime?
+
+  // Poblado cuando TODOS los ítems del lote llegan a un estado terminal
+  // (RECEIVED o CANCELLED) — no antes. No implica que todo haya llegado bien,
+  // solo que no queda nada pendiente de resolver en este lote.
+  closedAt DateTime?
 
   notes String?
 
-  createdAt  DateTime  @default(now())
-  receivedAt DateTime?
+  // Ítems actualmente EN VIVO apuntando acá (ver InventoryItem.currentTransferId).
+  items InventoryItem[]
+  // Historial completo del lote, incluidos los ítems ya resueltos.
+  transferItems StockTransferItem[]
 
-  @@index([tenantId])
-  @@index([fromTiendaId])
-  @@index([toTiendaId])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, fromTiendaId, status])
+  @@index([tenantId, toTiendaId, status])
+  // + índice único parcial (tenantId, fromTiendaId, toTiendaId) WHERE
+  //   status='OPEN' vía migración raw SQL (Prisma DSL no soporta parciales —
+  //   mismo caso que CashSession_tiendaId_open_unique). Garantiza un solo
+  //   lote abierto por combinación origen→destino, incluso bajo altas
+  //   concurrentes — ver migración 20260905030000_stock_transfer_constraints.
+}
+
+model StockTransferItem {
+  id     String                   @id @default(cuid())
+  status StockTransferItemStatus @default(PREPARING)
+
+  transferId String
+  transfer   StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  addedById String
+  addedBy   User   @relation("StockTransferItemAdder", fields: [addedById], references: [id])
+
+  receivedById String?
+  receivedBy   User?     @relation("StockTransferItemReceiver", fields: [receivedById], references: [id])
+  receivedAt   DateTime?
+
+  cancelledById String?
+  cancelledBy   User?     @relation("StockTransferItemCanceller", fields: [cancelledById], references: [id])
+  cancelledAt   DateTime?
+  cancelReason  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([transferId])
+  @@index([inventoryItemId])
+  // + índice único parcial (inventoryItemId) WHERE status IN ('PREPARING',
+  //   'DISPATCHED') vía migración raw SQL — mismo motivo que arriba. Esta es
+  //   la garantía real de "un IMEI no puede estar en dos lotes vivos a la
+  //   vez", a nivel DB y no solo de código — ver migración
+  //   20260905030000_stock_transfer_constraints.
 }
 
 // ─── Punto de Venta ───────────────────────────────────────────────────────────
@@ -779,6 +888,16 @@ enum MovementType {
   EXPENSE
 }
 
+// CONSTRAINT DE DB NO REPRESENTABLE ACÁ (Prisma no soporta índices únicos
+// parciales/filtrados en el schema DSL a esta versión): existe un índice
+// único parcial `CashSession_tiendaId_open_unique` en
+// (tiendaId) WHERE closedAt IS NULL — ver migración
+// 20260905020000_cash_session_one_open_per_tienda. Garantiza a nivel DB que
+// no puede haber más de una sesión abierta por tienda al mismo tiempo, ni
+// siquiera bajo dos requests de apertura concurrentes (el chequeo
+// findFirst de cash.controller.js/openCash es solo el fast-path optimista;
+// esta es la guarda real). openCash captura el P2002 resultante y responde
+// 409, mismo mensaje que el chequeo optimista.
 model CashSession {
   // Se eliminan initialAmountARS, initialAmountUSD, finalAmount. El saldo
   // inicial por moneda es un LedgerEntry (type=SESSION_OPEN) por moneda
