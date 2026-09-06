@@ -22,6 +22,11 @@ const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3001;
 
+// Corremos detrás del proxy de Railway: confiar en el primer hop de
+// X-Forwarded-For para que express-rate-limit (y req.ip) usen la IP real
+// del cliente y no la interna del proxy.
+app.set('trust proxy', 1);
+
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 fs.mkdirSync(uploadsDir, { recursive: true });
