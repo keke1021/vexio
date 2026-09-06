@@ -16,6 +16,7 @@ const adminRoutes         = require('./routes/admin.routes');
 const notificationsRoutes = require('./routes/notifications.routes');
 const ticketsRoutes       = require('./routes/tickets.routes');
 const ratesRoutes         = require('./routes/rates.routes');
+const stockTransfersRoutes = require('./routes/stockTransfers.routes');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -51,6 +52,7 @@ app.use('/uploads', express.static(uploadsDir));
 app.use('/api/auth', authRoutes);
 app.use('/api', suppliersRoutes);     // antes que inventoryRoutes
 app.use('/api', inventoryRoutes);
+app.use('/api', stockTransfersRoutes);
 app.use('/api', posRoutes);
 app.use('/api', repairsRoutes);
 app.use('/api', cashRoutes);

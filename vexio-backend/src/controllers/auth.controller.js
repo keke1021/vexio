@@ -78,6 +78,13 @@ const login = async (req, res) => {
       userId: user.id,
       tenantId: tenant?.id ?? user.tenantId,
       role: user.role,
+      // Necesario para assertTiendaAccess (StockTransfer) — sin esto,
+      // req.user.tiendaId es siempre undefined y SELLER/TECH quedan
+      // bloqueados de todo el módulo pase lo que pase. Mismo criterio de
+      // staleness que ya acepta este JWT para role/tenantId: si un admin
+      // reasigna la tienda de un usuario, tarda hasta JWT_EXPIRES_IN (15m
+      // default) en reflejarse, hasta el próximo refresh.
+      tiendaId: user.tiendaId,
     });
 
     const refreshToken = generateRefreshToken();
@@ -89,7 +96,10 @@ const login = async (req, res) => {
     return res.status(200).json({
       accessToken,
       refreshToken,
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      // tiendaId: el frontend lo usa para mostrar/ocultar acciones de
+      // StockTransfer según la sucursal propia del usuario (UX — el
+      // enforcement real es siempre server-side, vía assertTiendaAccess).
+      user: { id: user.id, email: user.email, name: user.name, role: user.role, tiendaId: user.tiendaId },
       tenant: tenant
         ? { id: tenant.id, name: tenant.name, slug: tenant.slug, activeModules: tenant.activeModules ?? [] }
         : { id: user.tenantId, name: 'Admin', slug: 'admin', activeModules: [] },
@@ -155,6 +165,7 @@ const refresh = async (req, res) => {
       userId: user.id,
       tenantId: user.tenantId,
       role: user.role,
+      tiendaId: user.tiendaId, // ver comentario en login()
     });
 
     const tenantData = user.tenant
