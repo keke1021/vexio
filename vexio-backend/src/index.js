@@ -36,10 +36,15 @@ fs.mkdirSync(uploadsDir, { recursive: true });
 // ALLOWED_ORIGINS no está seteada. En producción, setear ALLOWED_ORIGINS
 // con el/los dominio(s) reales del frontend.
 const DEFAULT_DEV_ORIGINS = 'http://localhost:5173,http://localhost:3000';
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || DEFAULT_DEV_ORIGINS)
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+// Orígenes de producción siempre permitidos, se sumen o no vía ALLOWED_ORIGINS.
+const ALWAYS_ALLOWED_ORIGINS = ['https://vexio-chi.vercel.app'];
+const allowedOrigins = [
+  ...ALWAYS_ALLOWED_ORIGINS,
+  ...(process.env.ALLOWED_ORIGINS || DEFAULT_DEV_ORIGINS)
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+];
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -47,8 +52,10 @@ app.use(cors({
     if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
+    // Rechazo CORS limpio: el navegador recibe una respuesta sin los headers
+    // Access-Control-*, sin que el server tire un 500 en el preflight.
     console.warn(`[CORS] Origen bloqueado: ${origin}`);
-    return callback(new Error('No permitido por CORS'));
+    return callback(null, false);
   },
 }));
 app.use(express.json());
