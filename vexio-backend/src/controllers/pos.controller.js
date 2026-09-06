@@ -79,11 +79,18 @@ const looksLikeImei = (q) => IMEI_PLACEHOLDER_RE.test(q) || /\d{6,}/.test(q);
 const searchItem = async (req, res) => {
   try {
     const { tenantId } = req.user;
-    const { q } = req.query;
+    const { q, tiendaId } = req.query;
 
     if (!q || q.trim().length < 2) return res.json({ items: [] });
 
     const query = q.trim();
+
+    // tiendaId es opcional — el POS no lo manda (busca en todo el tenant,
+    // comportamiento sin cambios). Lo usa el flujo de "nueva transferencia"
+    // (TransfersMain/NewTransferModal) para acotar la búsqueda a los equipos
+    // realmente disponibles en la sucursal de origen — no tiene sentido
+    // ofrecer para transferir un equipo que ya está en otra sucursal.
+    const tiendaFilter = tiendaId ? { tiendaId } : {};
 
     // Antes un solo OR buscaba el mismo string contra IMEI + nombre + color
     // a la vez — "15" (buscando "iPhone 15") matcheaba `imei contains "15"`
@@ -91,10 +98,11 @@ const searchItem = async (req, res) => {
     // "15" aparece de casualidad en la mayoría. Ahora el query entra a un
     // campo o al otro, nunca a los dos con el mismo substring corto.
     const where = looksLikeImei(query)
-      ? { tenantId, status: 'AVAILABLE', imei: { contains: query, mode: 'insensitive' } }
+      ? { tenantId, status: 'AVAILABLE', ...tiendaFilter, imei: { contains: query, mode: 'insensitive' } }
       : {
           tenantId,
           status: 'AVAILABLE',
+          ...tiendaFilter,
           OR: [
             { product: { name:  { contains: query, mode: 'insensitive' } } },
             { product: { color: { contains: query, mode: 'insensitive' } } },

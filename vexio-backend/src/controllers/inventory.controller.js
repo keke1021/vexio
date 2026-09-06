@@ -135,7 +135,15 @@ const getById = async (req, res) => {
 
     const item = await prisma.inventoryItem.findFirst({
       where: { id, tenantId, ...(tiendaId && { tiendaId }) },
-      include: { product: true, supplier: true, tienda: { select: { id: true, name: true } } },
+      include: {
+        product: true,
+        supplier: true,
+        tienda: { select: { id: true, name: true } },
+        // Poblado solo mientras status=IN_TRANSIT — para mostrar "en
+        // tránsito hacia [sucursal]" y bloquear la edición manual de status
+        // en el frontend (ver InventoryDetail.jsx).
+        currentTransfer: { select: { id: true, toTienda: { select: { id: true, name: true } } } },
+      },
     });
 
     if (!item) return res.status(404).json({ message: 'Equipo no encontrado.' });
@@ -229,6 +237,20 @@ const update = async (req, res) => {
     const existing = await prisma.inventoryItem.findFirst({ where: { id, tenantId } });
     if (!existing) return res.status(404).json({ message: 'Equipo no encontrado.' });
 
+    // Un ítem con un StockTransferItem vivo (currentTransferId poblado —
+    // EN_PREPARACION o EN_CAMINO) no puede tener su status pisado por acá.
+    // Sin esta guarda, este endpoint podía dejarlo, por ejemplo, AVAILABLE
+    // de nuevo mientras el lote seguía "creyendo" que estaba en camino —
+    // el StockTransferItem quedaba huérfano y el equipo se podía vender de
+    // nuevo en otro lado sin resolver la transferencia. La única vía válida
+    // para sacar un ítem de IN_TRANSIT es el propio módulo de
+    // Transferencias (recibir/cancelar), que mantiene todo sincronizado.
+    if (status && existing.currentTransferId) {
+      return res.status(409).json({
+        message: 'Este equipo está en tránsito — el status solo se puede cambiar desde el módulo de Transferencias.',
+      });
+    }
+
     const updated = await prisma.inventoryItem.update({
       where: { id },
       data: {
@@ -260,6 +282,14 @@ const remove = async (req, res) => {
 
     const existing = await prisma.inventoryItem.findFirst({ where: { id, tenantId } });
     if (!existing) return res.status(404).json({ message: 'Equipo no encontrado.' });
+
+    // Mismo motivo que en update(): un ítem en tránsito no se puede dar de
+    // baja por acá sin dejar huérfano el StockTransferItem que lo referencia.
+    if (existing.currentTransferId) {
+      return res.status(409).json({
+        message: 'Este equipo está en tránsito — no se puede dar de baja hasta resolver la transferencia.',
+      });
+    }
 
     await prisma.inventoryItem.update({ where: { id }, data: { status: 'DEFECTIVE' } });
 
