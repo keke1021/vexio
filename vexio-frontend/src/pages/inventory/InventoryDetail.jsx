@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
+import SendToTiendaPanel from '../transfers/SendToTiendaPanel';
 
 const CONDITIONS = { NEW: 'Nuevo (sellado)', LIKE_NEW: 'Como nuevo', REFURBISHED: 'Reacondicionado', USED: 'Usado' };
 const STATUS_OPTIONS = [
@@ -150,7 +151,15 @@ const InventoryDetail = () => {
           <span className="font-mono">{item.imei}</span>
         </Row>
         <Row label="Condición">{CONDITIONS[item.condition]}</Row>
-        <Row label="Estado">{STATUS_OPTIONS.find((s) => s.value === item.status)?.label ?? item.status}</Row>
+        <Row label="Estado">
+          {item.status === 'IN_TRANSIT' ? (
+            <span className="text-[#3B82F6] font-medium">
+              En tránsito{item.currentTransfer?.toTienda ? ` hacia ${item.currentTransfer.toTienda.name}` : ''}
+            </span>
+          ) : (
+            STATUS_OPTIONS.find((s) => s.value === item.status)?.label ?? item.status
+          )}
+        </Row>
         <Row label="Moneda">{item.currencyCode ?? 'ARS'}</Row>
         <Row label="Costo">{formatByCurrency(item.costPrice, item.currencyCode)}</Row>
         <Row label="Precio de venta">{formatByCurrency(item.salePrice, item.currencyCode)}</Row>
@@ -168,7 +177,7 @@ const InventoryDetail = () => {
       </div>
 
       {isEditing && (
-        <div className="border border-[#3B82F6]/30 rounded-xl p-5 mb-5 bg-[#EFF6FF]/40">
+        <div className="border border-[#E2E8F0] rounded-xl p-5 mb-5 bg-white" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
           <p className="text-[12px] text-[#3B82F6] font-medium uppercase tracking-wider mb-4">Editar</p>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -211,15 +220,36 @@ const InventoryDetail = () => {
               </div>
               <div>
                 <label className="block text-[13px] font-medium text-[#64748B] mb-1.5">Estado</label>
-                <select
-                  value={editForm.status}
-                  onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value }))}
-                  className="w-full bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#64748B] focus:outline-none focus:border-[#3B82F6]"
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
+                {item.status === 'IN_TRANSIT' ? (
+                  <>
+                    <select
+                      value="IN_TRANSIT"
+                      disabled
+                      className="w-full bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#64748B] cursor-not-allowed"
+                    >
+                      <option value="IN_TRANSIT">En tránsito</option>
+                    </select>
+                    <p className="text-[11px] text-[#3B82F6] mt-1.5">
+                      Este equipo está en tránsito{item.currentTransfer?.toTienda ? ` hacia ${item.currentTransfer.toTienda.name}` : ''} —
+                      no se puede editar el status manualmente. Resolvé la transferencia desde{' '}
+                      {item.currentTransfer ? (
+                        <Link to={`/transfers/${item.currentTransfer.id}`} className="underline hover:text-[#2563EB]">
+                          Transferencias
+                        </Link>
+                      ) : 'Transferencias'}.
+                    </p>
+                  </>
+                ) : (
+                  <select
+                    value={editForm.status}
+                    onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value }))}
+                    className="w-full bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#64748B] focus:outline-none focus:border-[#3B82F6]"
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
             <div>
@@ -233,7 +263,13 @@ const InventoryDetail = () => {
             </div>
             <div className="flex gap-3 pt-1">
               <button
-                onClick={() => updateMutation.mutate(editForm)}
+                onClick={() => {
+                  // Si está IN_TRANSIT, el status no se tocó (el select está
+                  // deshabilitado) — no lo mandamos, para no pisar contra la
+                  // guarda 409 del backend por un campo que ni se editó.
+                  const { status, ...rest } = editForm;
+                  updateMutation.mutate(item.status === 'IN_TRANSIT' ? rest : editForm);
+                }}
                 disabled={updateMutation.isPending}
                 className="bg-[#3B82F6] hover:bg-[#2563EB] text-white text-[13px] font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-40"
               >
@@ -248,6 +284,18 @@ const InventoryDetail = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {item.status === 'AVAILABLE' && !isEditing && (
+        <SendToTiendaPanel
+          inventoryItemId={item.id}
+          fromTiendaId={item.tienda?.id}
+          onSent={(transfer) => {
+            queryClient.invalidateQueries({ queryKey: ['inventory', id] });
+            queryClient.invalidateQueries({ queryKey: ['inventory'] });
+            navigate(`/transfers/${transfer.id}`);
+          }}
+        />
       )}
 
       {canWrite && !isEditing && (

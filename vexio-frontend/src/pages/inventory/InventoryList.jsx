@@ -8,10 +8,16 @@ import { useAuth } from '../../context/AuthContext';
 
 const CONDITIONS = { NEW: 'Nuevo', LIKE_NEW: 'Como nuevo', REFURBISHED: 'Reacond.', USED: 'Usado' };
 
+// IMPORTANTE: esto es una whitelist de status conocidos, no un blacklist —
+// cualquier status no contemplado explícitamente NO debe caer en el default
+// "Disponible" (antes IN_TRANSIT caía justo ahí, mostrando en verde un
+// equipo que en realidad no se puede vender porque está viajando a otra
+// sucursal).
 const getStockBadge = (item) => {
-  if (item.status === 'SOLD')      return { label: 'Vendido',    cls: 'text-[#475569] bg-[#F1F5F9]' };
-  if (item.status === 'RESERVED')  return { label: 'Reservado',  cls: 'text-[#3B82F6] bg-[#EFF6FF]' };
-  if (item.status === 'DEFECTIVE') return { label: 'Baja',       cls: 'text-red-500 bg-red-50' };
+  if (item.status === 'SOLD')       return { label: 'Vendido',      cls: 'text-[#475569] bg-[#F1F5F9]' };
+  if (item.status === 'RESERVED')   return { label: 'Reservado',    cls: 'text-[#3B82F6] bg-[#EFF6FF]' };
+  if (item.status === 'DEFECTIVE')  return { label: 'Baja',         cls: 'text-red-500 bg-red-50' };
+  if (item.status === 'IN_TRANSIT') return { label: 'En tránsito',  cls: 'text-amber-600 bg-amber-50' };
   if (item.stockCount === 1)                          return { label: 'Último',     cls: 'text-orange-500 bg-orange-50' };
   if (item.stockCount <= item.product.minStock)       return { label: 'Stock bajo', cls: 'text-yellow-600 bg-yellow-50' };
   return { label: 'Disponible', cls: 'text-emerald-600 bg-emerald-50' };
@@ -429,6 +435,7 @@ const InventoryList = () => {
           <option value="AVAILABLE">Disponible</option>
           <option value="SOLD">Vendido</option>
           <option value="RESERVED">Reservado</option>
+          <option value="IN_TRANSIT">En tránsito</option>
         </select>
         {tiendas.length > 1 && (
           <select
