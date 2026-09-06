@@ -24,6 +24,8 @@ import SuppliersList from './pages/suppliers/SuppliersList';
 import SuppliersNew from './pages/suppliers/SuppliersNew';
 import SuppliersDetail from './pages/suppliers/SuppliersDetail';
 import SuppliersOrderNew from './pages/suppliers/SuppliersOrderNew';
+import TransfersMain from './pages/transfers/TransfersMain';
+import TransferDetail from './pages/transfers/TransferDetail';
 import ReportsPage from './pages/reports/ReportsPage';
 import ChangePassword from './pages/settings/ChangePassword';
 import TicketsList from './pages/tickets/TicketsList';
@@ -73,6 +75,9 @@ const App = () => (
           <Route path="/suppliers/new"                    element={<SuppliersNew />} />
           <Route path="/suppliers/:id"                    element={<SuppliersDetail />} />
           <Route path="/suppliers/:id/orders/new"         element={<SuppliersOrderNew />} />
+
+          <Route path="/transfers"     element={<TransfersMain />} />
+          <Route path="/transfers/:id" element={<TransferDetail />} />
 
           <Route path="/settings/password" element={<ChangePassword />} />
 

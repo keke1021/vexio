@@ -28,6 +28,7 @@ const NAV = [
   { path: '/repairs',    label: 'Reparaciones',      exact: false, module: 'repairs' },
   { path: '/cash',       label: 'Caja',              exact: false, module: 'cash' },
   { path: '/suppliers',  label: 'Proveedores',       exact: false, module: 'suppliers' },
+  { path: '/transfers',  label: 'Transferencias',    exact: false, module: 'multibranch' },
   { path: '/tickets',    label: 'Soporte',           exact: false, module: null },
 ];
 
