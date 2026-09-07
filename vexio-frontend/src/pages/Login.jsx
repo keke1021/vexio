@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Smartphone } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import SyntraFooter from '../components/SyntraFooter';
 
 const InputField = ({ label, type, placeholder, value, onChange, required }) => (
   <div>
@@ -48,7 +49,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center px-4">
+    <div className="relative min-h-screen bg-[#F8FAFC] flex items-center justify-center px-4">
       <div className="w-full max-w-[360px]">
 
         <div className="mb-9 flex flex-col items-center text-center">
@@ -105,6 +106,8 @@ const Login = () => {
         </div>
 
       </div>
+
+      <SyntraFooter variant="fixed" />
     </div>
   );
 };
