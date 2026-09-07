@@ -1,9 +1,10 @@
-﻿import { useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import api from '../api/axios';
+import SyntraFooter from './SyntraFooter';
 
 const SunIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -18,6 +19,18 @@ const SunIcon = () => (
 const MoonIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+  </svg>
+);
+
+const MenuIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
   </svg>
 );
 
@@ -134,9 +147,15 @@ const Layout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const activeModules = tenant?.activeModules ?? [];
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const isActive = (item) =>
     item.exact ? location.pathname === item.path : location.pathname.startsWith(item.path);
+
+  const visibleNav = NAV.filter((item) => item.module === null || activeModules.includes(item.module));
+
+  // Cerrar el menú mobile al navegar
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
 
   const { data: repairStats } = useQuery({
     queryKey:     ['repairs-stats'],
@@ -152,13 +171,22 @@ const Layout = () => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col">
-      <header className="px-6 h-14 flex items-center justify-between shrink-0 print:hidden"
+      <header className="relative z-50 px-6 h-14 flex items-center justify-between shrink-0 print:hidden"
         style={{ backgroundColor: '#1E3A5F', boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }}>
         <div className="flex items-center gap-5">
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="md:hidden p-1.5 -ml-1.5 text-white/75 hover:text-white transition-colors"
+            title="Menú"
+            aria-label="Menú"
+            aria-expanded={menuOpen}
+          >
+            {menuOpen ? <CloseIcon /> : <MenuIcon />}
+          </button>
           <span className="text-[15px] font-bold tracking-tight select-none text-white">Vexio</span>
-          <span className="text-white/20">|</span>
-          <nav className="flex items-center gap-0.5">
-            {NAV.filter((item) => item.module === null || activeModules.includes(item.module)).map((item) => {
+          <span className="hidden md:inline text-white/20">|</span>
+          <nav className="hidden md:flex items-center gap-0.5">
+            {visibleNav.map((item) => {
               const active = isActive(item);
               const badge  = item.path === '/repairs' && repairStats?.active > 0
                 ? repairStats.active
@@ -209,11 +237,53 @@ const Layout = () => {
             Salir
           </button>
         </div>
+        {menuOpen && (
+          <>
+            <div
+              className="md:hidden fixed inset-0 top-14 z-40"
+              onClick={() => setMenuOpen(false)}
+            />
+            <nav
+              className="md:hidden absolute top-full left-0 right-0 z-50 py-2 print:hidden"
+              style={{ backgroundColor: '#1E3A5F', boxShadow: '0 6px 16px rgba(0,0,0,0.25)' }}
+            >
+              {visibleNav.map((item) => {
+                const active = isActive(item);
+                const badge  = item.path === '/repairs' && repairStats?.active > 0
+                  ? repairStats.active
+                  : null;
+
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setMenuOpen(false)}
+                    className={`relative flex items-center px-6 py-3 text-[14px] font-medium transition-colors ${
+                      active
+                        ? 'text-white bg-white/15'
+                        : 'text-white/75 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    {item.label}
+                    {badge && (
+                      <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1
+                        rounded-full bg-[#3B82F6]/20 text-[#3B82F6] text-[10px] font-bold leading-none">
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </nav>
+          </>
+        )}
       </header>
 
       <main className="flex-1">
         <Outlet />
       </main>
+
+      <SyntraFooter />
     </div>
   );
 };
