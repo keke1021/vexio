@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import api from '../api/axios';
 import SyntraFooter from './SyntraFooter';
+import { filterNav } from '../config/access';
 
 const SunIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -33,17 +34,6 @@ const CloseIcon = () => (
     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
   </svg>
 );
-
-const NAV = [
-  { path: '/dashboard',  label: 'Inicio',           exact: true,  module: null },
-  { path: '/cash',       label: 'Caja',              exact: false, module: 'cash' },
-  { path: '/inventory',  label: 'Inventario',        exact: false, module: 'inventory' },
-  { path: '/pos',        label: 'Ventas',             exact: false, module: 'pos' },
-  { path: '/repairs',    label: 'Reparaciones',      exact: false, module: 'repairs' },
-  { path: '/suppliers',  label: 'Proveedores',       exact: false, module: 'suppliers' },
-  { path: '/transfers',  label: 'Transferencias',    exact: false, module: 'multibranch' },
-  { path: '/tickets',    label: 'Soporte',           exact: false, module: null },
-];
 
 const TYPE_COLORS = {
   INFO:    'text-[#3B82F6]',
@@ -152,7 +142,7 @@ const Layout = () => {
   const isActive = (item) =>
     item.exact ? location.pathname === item.path : location.pathname.startsWith(item.path);
 
-  const visibleNav = NAV.filter((item) => item.module === null || activeModules.includes(item.module));
+  const visibleNav = filterNav(user?.role, activeModules);
 
   // Cerrar el menú mobile al navegar
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);

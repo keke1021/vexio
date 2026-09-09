@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import PrivateRoute from './components/PrivateRoute';
+import RoleRoute from './components/RoleRoute';
 import AdminRoute from './components/AdminRoute';
 import Layout from './components/Layout';
 import AdminLayout from './components/AdminLayout';
@@ -54,30 +55,44 @@ const App = () => (
           {/* /reports redirects to /dashboard (which shows reports) */}
           <Route path="/reports" element={<Navigate to="/dashboard" replace />} />
 
-          <Route path="/inventory"      element={<InventoryList />} />
-          <Route path="/inventory/new"  element={<InventoryNew />} />
-          <Route path="/inventory/:id"  element={<InventoryDetail />} />
+          {/* Módulos gateados por rol (mismo criterio que el backend valida
+              en cash / pos / suppliers / stockTransfers routes). */}
+          <Route element={<RoleRoute module="inventory" />}>
+            <Route path="/inventory"      element={<InventoryList />} />
+            <Route path="/inventory/new"  element={<InventoryNew />} />
+            <Route path="/inventory/:id"  element={<InventoryDetail />} />
+          </Route>
 
-          <Route path="/pos"             element={<PosMain />} />
-          <Route path="/pos/sales"       element={<PosSales />} />
-          <Route path="/pos/sales/:id"   element={<PosSaleDetail />} />
+          <Route element={<RoleRoute module="pos" />}>
+            <Route path="/pos"             element={<PosMain />} />
+            <Route path="/pos/sales"       element={<PosSales />} />
+            <Route path="/pos/sales/:id"   element={<PosSaleDetail />} />
+          </Route>
 
-          <Route path="/repairs"         element={<RepairsList />} />
-          <Route path="/repairs/new"     element={<RepairsNew />} />
-          <Route path="/repairs/:id"     element={<RepairsDetail />} />
+          <Route element={<RoleRoute module="repairs" />}>
+            <Route path="/repairs"         element={<RepairsList />} />
+            <Route path="/repairs/new"     element={<RepairsNew />} />
+            <Route path="/repairs/:id"     element={<RepairsDetail />} />
+          </Route>
 
-          <Route path="/cash"                  element={<CashMain />} />
-          <Route path="/cash/movements/new"    element={<CashMovementNew />} />
-          <Route path="/cash/sessions"         element={<CashSessionsHistory />} />
-          <Route path="/cash/sessions/:id"     element={<CashSessionDetail />} />
+          <Route element={<RoleRoute module="cash" />}>
+            <Route path="/cash"                  element={<CashMain />} />
+            <Route path="/cash/movements/new"    element={<CashMovementNew />} />
+            <Route path="/cash/sessions"         element={<CashSessionsHistory />} />
+            <Route path="/cash/sessions/:id"     element={<CashSessionDetail />} />
+          </Route>
 
-          <Route path="/suppliers"                        element={<SuppliersList />} />
-          <Route path="/suppliers/new"                    element={<SuppliersNew />} />
-          <Route path="/suppliers/:id"                    element={<SuppliersDetail />} />
-          <Route path="/suppliers/:id/orders/new"         element={<SuppliersOrderNew />} />
+          <Route element={<RoleRoute module="suppliers" />}>
+            <Route path="/suppliers"                        element={<SuppliersList />} />
+            <Route path="/suppliers/new"                    element={<SuppliersNew />} />
+            <Route path="/suppliers/:id"                    element={<SuppliersDetail />} />
+            <Route path="/suppliers/:id/orders/new"         element={<SuppliersOrderNew />} />
+          </Route>
 
-          <Route path="/transfers"     element={<TransfersMain />} />
-          <Route path="/transfers/:id" element={<TransferDetail />} />
+          <Route element={<RoleRoute module="multibranch" />}>
+            <Route path="/transfers"     element={<TransfersMain />} />
+            <Route path="/transfers/:id" element={<TransferDetail />} />
+          </Route>
 
           <Route path="/settings/password" element={<ChangePassword />} />
 

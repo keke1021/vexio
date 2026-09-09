@@ -9,13 +9,22 @@ const {
 
 router.use(authenticate);
 
-router.get('/cash/current',   getCurrent);
-router.get('/cash/movements', getMovements);
-router.get('/cash/summary',   getSummary);
+// Caja: OWNER/ADMIN/SELLER pueden ver; TECH no accede (ni por nav ni por URL
+// ni por request directo). Las escrituras (open/close/movements) siguen
+// restringidas a OWNER/ADMIN.
+// NB: el authorize va por-ruta y NO como router.use(...) — este router está
+// montado en el prefijo compartido '/api', así que un router.use(authorize)
+// se ejecutaría también para requests de otros módulos que apenas pasan por
+// acá antes de caer en su router real (mismo criterio que el resto del repo).
+const canView = authorize('OWNER', 'ADMIN', 'SELLER');
+
+router.get('/cash/current',   canView, getCurrent);
+router.get('/cash/movements', canView, getMovements);
+router.get('/cash/summary',   canView, getSummary);
 
 // IMPORTANTE: /cash/sessions debe estar ANTES de /cash/sessions/:id
-router.get('/cash/sessions',     getSessions);
-router.get('/cash/sessions/:id', getSessionById);
+router.get('/cash/sessions',     canView, getSessions);
+router.get('/cash/sessions/:id', canView, getSessionById);
 
 router.post('/cash/open',      authorize('OWNER', 'ADMIN'), openCash);
 router.post('/cash/close',     authorize('OWNER', 'ADMIN'), closeCash);
