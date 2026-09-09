@@ -3,9 +3,9 @@ import { useAuth } from '../context/AuthContext';
 import SyntraFooter from './SyntraFooter';
 import SelectBranch from '../pages/SelectBranch';
 
-// Dead-end para SELLER/TECH sin sucursal asignada — no pueden operar nada
-// (todo el sistema se scopea por sucursal). Un encargado tiene que asignarles
-// una desde el panel de Admin.
+// Dead-end para SELLER sin sucursal asignada — no puede operar nada
+// (todo el sistema se scopea por sucursal). Un encargado tiene que asignarle
+// una desde el panel de Admin. TECH no llega acá: está exento del scope.
 const NoBranchAssigned = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -40,15 +40,18 @@ const NoBranchAssigned = () => {
 
 // Guard: la app no monta hasta que la sesión tiene una sucursal activa.
 //   - SUPERADMIN: pasa (no está sujeto al scope por sucursal).
+//   - TECH: pasa siempre — ve las Reparaciones de todas las sucursales
+//     combinadas, no necesita (ni usa) una sucursal asignada. El backend
+//     también exime a TECH en requireActiveTienda.
 //   - activeTienda seteada: pasa.
 //   - sin activeTienda + varias disponibles (OWNER/ADMIN multi-sucursal):
 //     pantalla de selección obligatoria.
-//   - sin activeTienda + ninguna disponible (SELLER/TECH sin asignar): dead-end.
+//   - sin activeTienda + ninguna disponible (SELLER sin asignar): dead-end.
 const BranchGate = () => {
   const { user, activeTienda, availableTiendas } = useAuth();
 
   if (!user) return <Outlet />; // PrivateRoute ya maneja el no-autenticado
-  if (user.role === 'SUPERADMIN' || activeTienda) return <Outlet />;
+  if (user.role === 'SUPERADMIN' || user.role === 'TECH' || activeTienda) return <Outlet />;
   if ((availableTiendas?.length ?? 0) > 0) return <SelectBranch />;
   return <NoBranchAssigned />;
 };
