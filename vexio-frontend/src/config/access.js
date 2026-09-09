@@ -26,7 +26,7 @@ export const MODULE_ROLES = {
   inventory:   ['OWNER', 'ADMIN', 'SELLER'],
   pos:         ['OWNER', 'ADMIN', 'SELLER'],
   repairs:     ['OWNER', 'ADMIN', 'TECH'],
-  suppliers:   ['OWNER', 'ADMIN'],
+  suppliers:   ['OWNER', 'ADMIN', 'SELLER'],
   // Transferencias: SELLER/TECH entran, pero el backend los limita a su
   // sucursal asignada (assertTiendaAccess) — ven/operan solo lo de su tienda,
   // y el listado completo del tenant sigue siendo OWNER/ADMIN.

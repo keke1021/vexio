@@ -29,12 +29,12 @@ async function wipe(tenantId) {
     await tx.stockTransferItem.deleteMany({ where: { transfer: { tenantId } } });
     await tx.stockTransfer.deleteMany({ where: { tenantId } });
     await tx.delivery.deleteMany({ where: { tenantId } });
+    await tx.supplierPayment.deleteMany({ where: { tenantId } });   // RESTRICT FK -> PurchaseOrder: borrar ANTES
     await tx.cashMovement.deleteMany({ where: { tenantId } });
     await tx.sale.deleteMany({ where: { tenantId } });
     await tx.cashSession.deleteMany({ where: { tenantId } });
     await tx.purchaseOrder.deleteMany({ where: { tenantId } });
     await tx.payment.deleteMany({ where: { tenantId } });
-    await tx.supplierPayment.deleteMany({ where: { tenantId } });
     await tx.repairOrder.deleteMany({ where: { tenantId } });
     await tx.customer.deleteMany({ where: { tenantId } });
     await tx.inventoryItem.deleteMany({ where: { tenantId } });
@@ -159,7 +159,7 @@ async function main() {
   check('SELLER GET  /pos/sales',          (await req('GET','/pos/sales', T.SELLER_A)).status, 200);
   check('SELLER GET  /suppliers',          (await req('GET','/suppliers', T.SELLER_A)).status, 200);
   check('SELLER GET  /notifications',      (await req('GET','/notifications', T.SELLER_A)).status, 200);
-  check('SELLER GET  /suppliers/x',        (await req('GET','/suppliers/x', T.SELLER_A)).status, 403);
+  check('SELLER GET  /suppliers/x (pasa authz, 404 por id inexistente)', (await req('GET','/suppliers/x', T.SELLER_A)).status, 404);
   check('SELLER POST /cash/open',          (await req('POST','/cash/open', T.SELLER_A, { tiendaId: s.tiendaA.id })).status, 403);
   check('SELLER GET  /stock-transfers (sin tiendaId = listado completo)', (await req('GET','/stock-transfers', T.SELLER_A)).status, 403);
   check('SELLER GET  /reports/sales',      (await req('GET','/reports/sales?from=2020-01-01&to=2030-01-01', T.SELLER_A)).status, 403);
@@ -238,6 +238,53 @@ async function main() {
   // Segunda vía de "crear": armar lote nuevo desde la propia sucursal
   check('SELLER_A crea 2do transfer A->B (propia)',
     (await req('POST','/stock-transfers/items', T.SELLER_A, { inventoryItemId: s.itemA4.id, toTiendaId: s.tiendaB.id })).status, 201);
+
+  // ═══ PARTE C — Proveedores: SELLER acceso COMPLETO (no solo lectura) ════════
+  console.log('\n=== PARTE C: proveedores (SELLER acceso completo, TECH sin acceso) ===');
+
+  // SELLER: alta de proveedor
+  const supCreate = await req('POST','/suppliers', T.SELLER_A, { name: 'Proveedor Test', city: 'CABA', paymentDays: 30, phone: '11-4444-0000' });
+  check('SELLER POST /suppliers (alta)', supCreate.status, 201);
+  const supId = supCreate.data?.id;
+
+  // SELLER: listado, detalle, edición
+  check('SELLER GET  /suppliers (listado)',        (await req('GET','/suppliers', T.SELLER_A)).status, 200);
+  check('SELLER GET  /suppliers/:id (detalle)',    (await req('GET',`/suppliers/${supId}`, T.SELLER_A)).status, 200);
+  check('SELLER PUT  /suppliers/:id (edición)',    (await req('PUT',`/suppliers/${supId}`, T.SELLER_A, { notes: 'editado por seller' })).status, 200);
+
+  // SELLER: historial de órdenes / pagos (vacío todavía)
+  check('SELLER GET  /suppliers/:id/orders (historial)', (await req('GET',`/suppliers/${supId}/orders`, T.SELLER_A)).status, 200);
+
+  // SELLER: crear orden de compra
+  const ordCreate = await req('POST',`/suppliers/${supId}/orders`, T.SELLER_A, {
+    currency: 'ARS',
+    items: [{ description: 'Lote iPhone usado', quantity: 3, unitPrice: 50000 }],
+  });
+  check('SELLER POST /suppliers/:id/orders (orden de compra)', ordCreate.status, 201);
+  const ordId = ordCreate.data?.id;
+
+  // SELLER: registrar un pago / cobro sobre la orden (source EXTERNAL, sin caja)
+  check('SELLER POST /suppliers/orders/:id/payments (pago externo)',
+    (await req('POST',`/suppliers/orders/${ordId}/payments`, T.SELLER_A, { amount: 40000, currency: 'ARS', source: 'EXTERNAL' })).status, 201);
+
+  // SELLER: la orden ahora aparece con su pago en el historial
+  const ordersAfter = await req('GET',`/suppliers/${supId}/orders`, T.SELLER_A);
+  checkTrue('SELLER ve la orden con 1 pago en el historial',
+    (ordersAfter.data?.orders ?? []).some((o) => o.id === ordId && (o.payments ?? []).length === 1));
+
+  // SELLER: baja de proveedor (soft-delete). Se usa un proveedor aparte sin
+  // órdenes — el controller rechaza (409) si tiene órdenes PENDING, y `supId`
+  // tiene una.
+  const supCreate2 = await req('POST','/suppliers', T.SELLER_A, { name: 'Proveedor A Borrar', city: 'CABA', paymentDays: 30 });
+  check('SELLER DELETE /suppliers/:id (baja)', (await req('DELETE',`/suppliers/${supCreate2.data?.id}`, T.SELLER_A)).status, 200);
+
+  // TECH: sin acceso a NADA de proveedores
+  check('TECH GET  /suppliers',            (await req('GET','/suppliers', T.TECH_A)).status, 403);
+  check('TECH GET  /suppliers/:id',        (await req('GET',`/suppliers/${supId}`, T.TECH_A)).status, 403);
+  check('TECH POST /suppliers',            (await req('POST','/suppliers', T.TECH_A, { name: 'x' })).status, 403);
+  check('TECH GET    /suppliers/:id/orders', (await req('GET',`/suppliers/${supId}/orders`, T.TECH_A)).status, 403);
+  check('TECH POST   /suppliers/orders/:id/payments', (await req('POST',`/suppliers/orders/${ordId}/payments`, T.TECH_A, { amount: 1, currency: 'ARS', source: 'EXTERNAL' })).status, 403);
+  check('TECH DELETE /suppliers/:id',        (await req('DELETE',`/suppliers/${supId}`, T.TECH_A)).status, 403);
 
   console.log('\n[teardown] borrando tenant descartable...');
   await wipe(s.tenant.id);

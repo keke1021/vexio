@@ -8,20 +8,22 @@ const {
 
 router.use(authenticate);
 
-// Proveedores: módulo de OWNER/ADMIN. TECH y SELLER no acceden a la gestión
-// ni a las órdenes/pagos. Única excepción: el listado plano de proveedores
-// (solo nombre/contacto) que consume el form de alta de inventario, del que
-// SELLER sí participa.
-router.get('/suppliers',     authorize('OWNER', 'ADMIN', 'SELLER'), getSuppliers);
-router.post('/suppliers',    authorize('OWNER', 'ADMIN'), createSupplier);
-router.get('/suppliers/:id', authorize('OWNER', 'ADMIN'), getSupplierById);
-router.put('/suppliers/:id', authorize('OWNER', 'ADMIN'), updateSupplier);
-router.delete('/suppliers/:id', authorize('OWNER'), deleteSupplier);
+// Proveedores: OWNER / ADMIN / SELLER tienen acceso COMPLETO (no solo lectura)
+// a todo el módulo — listado, detalle, historial de órdenes y pagos, alta,
+// edición y baja de proveedores, órdenes de compra, señas y pagos/cobros.
+// TECH no accede a nada de Proveedores.
+const canUseSuppliers = authorize('OWNER', 'ADMIN', 'SELLER');
 
-router.get('/suppliers/:id/orders',             authorize('OWNER', 'ADMIN'), getOrders);
-router.post('/suppliers/:id/orders',            authorize('OWNER', 'ADMIN'), createOrder);
-router.put('/suppliers/:id/orders/:orderId',    authorize('OWNER', 'ADMIN'), updateOrder);
+router.get('/suppliers',        canUseSuppliers, getSuppliers);
+router.post('/suppliers',       canUseSuppliers, createSupplier);
+router.get('/suppliers/:id',    canUseSuppliers, getSupplierById);
+router.put('/suppliers/:id',    canUseSuppliers, updateSupplier);
+router.delete('/suppliers/:id', canUseSuppliers, deleteSupplier);
 
-router.post('/suppliers/orders/:id/payments', authorize('OWNER', 'ADMIN'), addOrderPayment);
+router.get('/suppliers/:id/orders',          canUseSuppliers, getOrders);
+router.post('/suppliers/:id/orders',         canUseSuppliers, createOrder);
+router.put('/suppliers/:id/orders/:orderId', canUseSuppliers, updateOrder);
+
+router.post('/suppliers/orders/:id/payments', canUseSuppliers, addOrderPayment);
 
 module.exports = router;

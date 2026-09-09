@@ -193,7 +193,8 @@ const SuppliersDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const canWrite = ['OWNER', 'ADMIN'].includes(user?.role);
+  // Proveedores: OWNER/ADMIN/SELLER tienen acceso completo (no solo lectura).
+  const canWrite = ['OWNER', 'ADMIN', 'SELLER'].includes(user?.role);
 
   const [confirmCancel, setConfirmCancel] = useState(null);
   const [actionError, setActionError] = useState('');

@@ -16,7 +16,8 @@ const fmtByCurrency = (n, code) => (code === 'ARS' ? fmt(n) : fmtGeneric(n, code
 const SuppliersList = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canWrite = ['OWNER', 'ADMIN'].includes(user?.role);
+  // Proveedores: OWNER/ADMIN/SELLER tienen acceso completo (no solo lectura).
+  const canWrite = ['OWNER', 'ADMIN', 'SELLER'].includes(user?.role);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['suppliers'],
