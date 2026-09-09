@@ -264,7 +264,9 @@ const TransferDetail = () => {
       <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
         {transfer.transferItems.map((ti) => {
           const cfg = ITEM_STATUS_CFG[ti.status] ?? { label: ti.status, cls: 'text-[#475569] bg-[#F1F5F9]' };
-          const canCancel = (isOrigin || isDest) && ['PREPARING', 'DISPATCHED'].includes(ti.status);
+          // Cancelar un ítem de una transferencia ya creada es OWNER/ADMIN
+          // (el backend lo gatea con authorize, no con assertTiendaAccess).
+          const canCancel = unrestricted && ['PREPARING', 'DISPATCHED'].includes(ti.status);
           const canReceive = isDest && ti.status === 'DISPATCHED';
 
           return (

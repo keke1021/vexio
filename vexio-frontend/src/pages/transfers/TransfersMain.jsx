@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/axios';
+import { useAuth } from '../../context/AuthContext';
 import NewTransferModal from './NewTransferModal';
+
+const UNRESTRICTED_ROLES = ['OWNER', 'ADMIN', 'SUPERADMIN'];
 
 const STATUS_BADGE = {
   OPEN:       { label: 'Abierto',   cls: 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]' },
@@ -65,6 +68,7 @@ const Section = ({ title, titleCls, transfers, tiendaId, hint }) => (
 const TransfersMain = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [showNewTransfer, setShowNewTransfer] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -73,9 +77,18 @@ const TransfersMain = () => {
     queryFn: () => api.get('/tiendas').then((r) => r.data),
     staleTime: 5 * 60_000,
   });
-  const tiendas = tiendasData?.tiendas ?? [];
+
+  // SELLER/TECH solo operan su sucursal asignada (el backend los limita con
+  // assertTiendaAccess). Reducimos el selector a esa sucursal así no eligen
+  // una ajena y se comen un 403 / una pantalla vacía engañosa.
+  const branchLocked = user && !UNRESTRICTED_ROLES.includes(user.role);
+  const allTiendas = tiendasData?.tiendas ?? [];
+  const tiendas = branchLocked ? allTiendas.filter((t) => t.id === user.tiendaId) : allTiendas;
+
   const tiendaIdParam = searchParams.get('tiendaId') || '';
-  const tiendaId = tiendaIdParam || (tiendas.length === 1 ? tiendas[0].id : '');
+  const tiendaId = branchLocked
+    ? (tiendas[0]?.id || '')
+    : (tiendaIdParam || (tiendas.length === 1 ? tiendas[0].id : ''));
 
   const { data, isLoading } = useQuery({
     queryKey: ['stock-transfers', tiendaId],
@@ -123,9 +136,15 @@ const TransfersMain = () => {
         )}
       </div>
 
-      {tiendas.length < 2 && (
+      {allTiendas.length < 2 && (
         <p className="text-[13px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
           Hace falta al menos dos sucursales para transferir stock entre ellas.
+        </p>
+      )}
+
+      {branchLocked && allTiendas.length >= 2 && !tiendaId && (
+        <p className="text-[13px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+          Tu usuario no tiene una sucursal asignada — pedile a un encargado que te asigne una para operar transferencias.
         </p>
       )}
 

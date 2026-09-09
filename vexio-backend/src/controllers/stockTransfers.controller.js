@@ -457,9 +457,12 @@ const cancelItem = async (req, res) => {
 
 /**
  * GET /api/stock-transfers?tiendaId=&direction=incoming|outgoing&status=
- * Sin tiendaId: OWNER/ADMIN/SUPERADMIN ven todo el tenant; SELLER/TECH quedan
- * limitados a su propia sucursal (origen o destino) — evita que alguien sin
- * acceso a ninguna sucursal puntual vea igual el listado completo.
+ * - OWNER/ADMIN/SUPERADMIN: sin tiendaId ven TODO el tenant; con tiendaId
+ *   filtran a esa sucursal.
+ * - SELLER/TECH: `tiendaId` es OBLIGATORIO y tiene que ser su sucursal
+ *   asignada (assertTiendaAccess). El listado completo sin filtrar es
+ *   exclusivo de OWNER/ADMIN — sin `tiendaId` reciben 403, no un volcado
+ *   parcial. La UI (TransfersMain) siempre manda `tiendaId`.
  */
 const getTransfers = async (req, res) => {
   try {
@@ -478,10 +481,7 @@ const getTransfers = async (req, res) => {
       else if (direction === 'incoming') tiendaFilter = { toTiendaId: tiendaId };
       else tiendaFilter = { OR: [{ fromTiendaId: tiendaId }, { toTiendaId: tiendaId }] };
     } else if (!['OWNER', 'ADMIN', 'SUPERADMIN'].includes(role)) {
-      if (!req.user.tiendaId) {
-        return res.json({ transfers: [], total: 0, page: 1, pageSize: parseInt(pageSize) || 20, totalPages: 1 });
-      }
-      tiendaFilter = { OR: [{ fromTiendaId: req.user.tiendaId }, { toTiendaId: req.user.tiendaId }] };
+      return res.status(403).json({ message: 'Indicá tu sucursal para ver sus transferencias.' });
     }
 
     const pageNum = Math.max(parseInt(page) || 1, 1);

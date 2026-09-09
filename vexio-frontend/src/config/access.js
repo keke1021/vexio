@@ -27,7 +27,10 @@ export const MODULE_ROLES = {
   pos:         ['OWNER', 'ADMIN', 'SELLER'],
   repairs:     ['OWNER', 'ADMIN', 'TECH'],
   suppliers:   ['OWNER', 'ADMIN'],
-  multibranch: ['OWNER', 'ADMIN'],
+  // Transferencias: SELLER/TECH entran, pero el backend los limita a su
+  // sucursal asignada (assertTiendaAccess) — ven/operan solo lo de su tienda,
+  // y el listado completo del tenant sigue siendo OWNER/ADMIN.
+  multibranch: ['OWNER', 'ADMIN', 'SELLER', 'TECH'],
 };
 
 /** ¿El rol puede usar este módulo? `module` null/desconocido → permitido. */
