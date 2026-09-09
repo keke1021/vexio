@@ -50,7 +50,7 @@ const RepairsNew = () => {
     customerName: '', customerPhone: '',
     deviceModel: '', deviceColor: '', deviceImei: '',
     faultType: 'SCREEN', faultDescription: '',
-    technicianId: '', budget: '', estimatedDate: '', internalNotes: '',
+    budget: '', estimatedDate: '', firstComment: '',
     // TECH elige de qué sucursal viene el equipo; el resto de los roles la
     // heredan de su sucursal activa (el backend la fuerza).
     tiendaId: activeTienda?.id ?? '',
@@ -58,12 +58,6 @@ const RepairsNew = () => {
   const [error, setError] = useState('');
 
   const set = (key) => (e) => setForm((p) => ({ ...p, [key]: e.target.value }));
-
-  const { data: techData } = useQuery({
-    queryKey: ['repairs-technicians'],
-    queryFn: () => api.get('/repairs/technicians').then((r) => r.data),
-    staleTime: 5 * 60_000,
-  });
 
   // Lista de sucursales — solo para el selector del TECH.
   const { data: tiendasData } = useQuery({
@@ -75,7 +69,15 @@ const RepairsNew = () => {
   const tiendas = tiendasData?.tiendas ?? [];
 
   const mutation = useMutation({
-    mutationFn: (data) => api.post('/repairs', data).then((r) => r.data),
+    mutationFn: async ({ firstComment, ...data }) => {
+      const repair = await api.post('/repairs', data).then((r) => r.data);
+      // La observación inicial arranca el thread de comentarios (ya no hay
+      // campo "notas internas"). Si falla, la orden igual quedó creada.
+      if (firstComment?.trim()) {
+        try { await api.post(`/repairs/${repair.id}/comments`, { body: firstComment.trim() }); } catch { /* noop */ }
+      }
+      return repair;
+    },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['repairs'] });
       queryClient.invalidateQueries({ queryKey: ['repairs-stats'] });
@@ -91,7 +93,6 @@ const RepairsNew = () => {
       ...form,
       budget: form.budget ? parseFloat(form.budget) : undefined,
       estimatedDate: form.estimatedDate || undefined,
-      technicianId: form.technicianId || undefined,
       // Solo el TECH manda tiendaId (elige el origen). Para el resto lo ignora
       // el backend y usa la sucursal activa.
       tiendaId: isTech ? (form.tiendaId || undefined) : undefined,
@@ -181,17 +182,11 @@ const RepairsNew = () => {
         </section>
 
         <section>
-          <p className="text-[11px] text-[#3B82F6] uppercase tracking-widest font-medium mb-4">Asignación</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <Label>Técnico asignado</Label>
-              <Select value={form.technicianId} onChange={set('technicianId')}>
-                <option value="">Sin asignar</option>
-                {techData?.technicians?.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </Select>
-            </div>
+          <p className="text-[11px] text-[#3B82F6] uppercase tracking-widest font-medium mb-2">Detalles</p>
+          <p className="text-[12px] text-[#94A3B8] mb-4">
+            La orden arranca sin técnico asignado — cualquier técnico la toma desde la lista con &ldquo;Tomar ticket&rdquo;.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label>Presupuesto</Label>
               <Input type="number" placeholder="0" value={form.budget} onChange={set('budget')} min="0" step="any" />
@@ -204,11 +199,11 @@ const RepairsNew = () => {
         </section>
 
         <section>
-          <Label>Notas internas</Label>
+          <Label>Observación inicial</Label>
           <textarea
-            value={form.internalNotes}
-            onChange={set('internalNotes')}
-            placeholder="Notas solo visibles para el equipo..."
+            value={form.firstComment}
+            onChange={set('firstComment')}
+            placeholder="Primer comentario del thread (opcional): estado del equipo al recibirlo, accesorios, etc."
             rows={2}
             className="w-full bg-white border border-[#E2E8F0] rounded-lg px-4 py-2.5 text-[13px] text-[#0F172A]
               placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-all resize-none"

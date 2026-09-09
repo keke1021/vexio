@@ -2,7 +2,7 @@ const express = require('express');
 const { authenticate, authorize, requireActiveTienda } = require('../middlewares/auth.middleware');
 const {
   getStats, getTechnicians,
-  getAll, getById, createRepair, updateRepair, deleteRepair,
+  getAll, getById, createRepair, updateRepair, takeRepair, addComment, deleteRepair,
 } = require('../controllers/repairs.controller');
 
 const router = express.Router();
@@ -23,6 +23,8 @@ router.get('/repairs', requireActiveTienda, getAll);
 router.get('/repairs/:id', requireActiveTienda, getById);
 router.post('/repairs', requireActiveTienda, createRepair);
 router.put('/repairs/:id', requireActiveTienda, updateRepair);
+router.post('/repairs/:id/take', requireActiveTienda, takeRepair);
+router.post('/repairs/:id/comments', requireActiveTienda, addComment);
 router.delete('/repairs/:id', authorize('OWNER', 'ADMIN', 'SELLER'), requireActiveTienda, deleteRepair);
 
 module.exports = router;

@@ -103,7 +103,9 @@ model User {
 
   refreshTokens       RefreshToken[]
   sales               Sale[]
-  technicianRepairs   RepairOrder[]
+  technicianRepairs   RepairOrder[]         @relation("RepairTechnician")
+  createdRepairs      RepairOrder[]         @relation("RepairCreator")
+  repairComments      RepairComment[]
   repairStatusChanges RepairStatusHistory[]
   cashSessionsOpened  CashSession[]         @relation("CashOpened")
   cashSessionsClosed  CashSession[]         @relation("CashClosed")
@@ -761,10 +763,19 @@ model RepairOrder {
   estimatedDate DateTime?
   readyAt       DateTime?
   deliveredAt   DateTime?
+  // DEPRECATED: reemplazado por el thread de comentarios (RepairComment). Se
+  // mantiene la columna para no perder el contenido histórico — el frontend lo
+  // muestra como "nota heredada" de solo lectura si trae algo.
   internalNotes String?
 
   technicianId String?
-  technician   User?   @relation(fields: [technicianId], references: [id])
+  technician   User?   @relation("RepairTechnician", fields: [technicianId], references: [id])
+
+  // Quién cargó la orden en el mostrador ("empleado"). Contraparte del técnico
+  // en el thread de comentarios y destinatario de las notificaciones cuando el
+  // taller responde. Nullable por las órdenes previas a esta migración.
+  createdById String?
+  createdBy   User?   @relation("RepairCreator", fields: [createdById], references: [id])
 
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id])
@@ -784,11 +795,37 @@ model RepairOrder {
   tienda   Tienda? @relation(fields: [tiendaId], references: [id])
 
   statusHistory RepairStatusHistory[]
+  comments      RepairComment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([tenantId, tiendaId])
+}
+
+// Thread de comentarios cronológico de una orden de reparación. Reemplaza al
+// viejo campo único RepairOrder.internalNotes: cada comentario preserva autor y
+// timestamp y no pisa a los anteriores. `fromTech` se congela al crear (rol del
+// autor en ese momento) y define de qué lado del mostrador vino el comentario
+// — con eso el frontend arma el badge "esperando respuesta de: empleado/técnico"
+// mirando sólo el último comentario, y el backend sabe a quién notificar.
+model RepairComment {
+  id   String @id @default(cuid())
+  body String
+
+  repairId String
+  repair   RepairOrder @relation(fields: [repairId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  // true  => lo escribió el taller (rol TECH)
+  // false => lo escribió el mostrador (OWNER/ADMIN/SELLER)
+  fromTech Boolean
+
+  createdAt DateTime @default(now())
+
+  @@index([repairId, createdAt])
 }
 
 // ─── Proveedores / Compras ────────────────────────────────────────────────────

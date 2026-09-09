@@ -1,18 +1,38 @@
 const { PrismaClient } = require('@prisma/client');
+const { notify } = require('../utils/notify');
 
 const prisma = new PrismaClient();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// A quién le toca responder en el thread, según el último comentario:
+//   - último comentario del taller (fromTech)      → 'EMPLEADO'
+//   - último comentario del mostrador (!fromTech)  → 'TECNICO'
+//   - sin comentarios                              → null
+const awaitingReplyFrom = (comments) => {
+  if (!comments || comments.length === 0) return null;
+  const last = comments[comments.length - 1];
+  return last.fromTech ? 'EMPLEADO' : 'TECNICO';
+};
+
 const serializeRepair = (repair) => ({
   ...repair,
   budget: repair.budget != null ? parseFloat(repair.budget) : null,
+  ...(repair.comments !== undefined && { awaitingReplyFrom: awaitingReplyFrom(repair.comments) }),
 });
 
 // ── Dos dimensiones de scope, independientes entre sí ──────────────────────
-// ROL (quién): TECH solo ve/edita sus propias órdenes asignadas.
+// ROL (quién) — para MODIFICAR: un TECH solo edita/avanza/borra las órdenes que
+// tomó (technicianId === él). No puede tocar el pool sin asignar hasta tomarlo.
 const roleScope = (role, userId) =>
   role === 'TECH' ? { technicianId: userId } : {};
+
+// ROL (quién) — para VER / comentar / tomar: en el modelo pull el TECH además
+// del propio ve el POOL sin asignar (technicianId null) para poder tomarlo.
+const visibilityScope = (role, userId) =>
+  role === 'TECH' ? { OR: [{ technicianId: userId }, { technicianId: null }] } : {};
+
+class RepairAlreadyTakenError extends Error {}
 
 // SUCURSAL (de dónde es el equipo): OWNER/ADMIN/SELLER ven solo las órdenes de
 // su sucursal activa. TECH es la EXCEPCIÓN EXPLÍCITA: ve las de TODAS las
@@ -25,6 +45,21 @@ const branchScope = (req) =>
 
 const TIENDA_SELECT = { select: { id: true, name: true } };
 
+const REPAIR_DETAIL_INCLUDE = {
+  technician: { select: { id: true, name: true, role: true } },
+  createdBy: { select: { id: true, name: true } },
+  tienda: TIENDA_SELECT,
+  customer: true,
+  statusHistory: {
+    include: { changedBy: { select: { id: true, name: true } } },
+    orderBy: { createdAt: 'asc' },
+  },
+  comments: {
+    include: { author: { select: { id: true, name: true, role: true } } },
+    orderBy: { createdAt: 'asc' },
+  },
+};
+
 // ─── Stats (usada por el badge del Layout) ────────────────────────────────────
 
 /**
@@ -34,7 +69,8 @@ const TIENDA_SELECT = { select: { id: true, name: true } };
 const getStats = async (req, res) => {
   try {
     const { tenantId, userId, role } = req.user;
-    const scope = { ...roleScope(role, userId), ...branchScope(req) };
+    // El badge del TECH incluye el pool sin asignar (trabajo disponible para tomar).
+    const scope = { ...visibilityScope(role, userId), ...branchScope(req) };
 
     const [active, ready] = await prisma.$transaction([
       prisma.repairOrder.count({
@@ -76,28 +112,42 @@ const getTechnicians = async (req, res) => {
 
 /**
  * GET /api/repairs
- * OWNER/ADMIN: todas las órdenes del tenant.
- * TECH: solo las asignadas a sí mismo.
+ * OWNER/ADMIN/SELLER: todas las órdenes de su sucursal activa.
+ * TECH: las asignadas a sí mismo + el pool sin asignar (modelo pull).
+ * Filtros: status, faultType (el técnico filtra por tipo de falla), search,
+ * assignment ('mine' | 'unassigned'), technicianId (solo no-TECH).
  */
 const getAll = async (req, res) => {
   try {
     const { tenantId, userId, role } = req.user;
-    const { status, technicianId, search, page = 1, limit = 50 } = req.query;
+    const { status, technicianId, faultType, assignment, search, page = 1, limit = 50 } = req.query;
+
+    // visibilityScope puede traer un `OR` (pool del TECH); search también usa
+    // `OR` — se combinan con AND para que no se pisen entre sí.
+    const scope = visibilityScope(role, userId);
+    const searchClause = search
+      ? {
+          OR: [
+            { customerName: { contains: search, mode: 'insensitive' } },
+            { customerPhone: { contains: search, mode: 'insensitive' } },
+            { deviceModel: { contains: search, mode: 'insensitive' } },
+          ],
+        }
+      : null;
 
     const where = {
       tenantId,
-      ...roleScope(role, userId),
       ...branchScope(req),
       ...(status && { status }),
-      // Solo OWNER/ADMIN pueden filtrar por técnico ajeno
-      ...(technicianId && role !== 'TECH' && { technicianId }),
-      ...(search && {
-        OR: [
-          { customerName: { contains: search, mode: 'insensitive' } },
-          { customerPhone: { contains: search, mode: 'insensitive' } },
-          { deviceModel: { contains: search, mode: 'insensitive' } },
-        ],
-      }),
+      ...(faultType && { faultType }),
+      ...(assignment === 'unassigned' && { technicianId: null }),
+      ...(assignment === 'mine' && { technicianId: userId }),
+      // Filtro por técnico ajeno: solo no-TECH, y solo si no pidió assignment.
+      ...(technicianId && role !== 'TECH' && !assignment && { technicianId }),
+      AND: [
+        ...(Object.keys(scope).length ? [scope] : []),
+        ...(searchClause ? [searchClause] : []),
+      ],
     };
 
     const [repairs, total] = await prisma.$transaction([
@@ -106,6 +156,9 @@ const getAll = async (req, res) => {
         include: {
           technician: { select: { id: true, name: true } },
           tienda: TIENDA_SELECT,
+          // Sólo el último comentario — alcanza para el badge "esperando
+          // respuesta de: …" en la lista.
+          comments: { orderBy: { createdAt: 'desc' }, take: 1, select: { fromTech: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (parseInt(page) - 1) * parseInt(limit),
@@ -114,7 +167,13 @@ const getAll = async (req, res) => {
       prisma.repairOrder.count({ where }),
     ]);
 
-    res.json({ repairs: repairs.map(serializeRepair), total, page: parseInt(page), limit: parseInt(limit) });
+    // En la lista sólo interesa el badge derivado, no el comentario crudo.
+    const rows = repairs.map((r) => {
+      const { comments, ...rest } = serializeRepair(r);
+      return rest;
+    });
+
+    res.json({ repairs: rows, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (error) {
     console.error('[repairs:getAll]', error);
     res.status(500).json({ message: 'Error interno del servidor.' });
@@ -131,16 +190,8 @@ const getById = async (req, res) => {
     const { id } = req.params;
 
     const repair = await prisma.repairOrder.findFirst({
-      where: { id, tenantId, ...roleScope(role, userId), ...branchScope(req) },
-      include: {
-        technician: { select: { id: true, name: true, role: true } },
-        tienda: TIENDA_SELECT,
-        customer: true,
-        statusHistory: {
-          include: { changedBy: { select: { id: true, name: true } } },
-          orderBy: { createdAt: 'asc' },
-        },
-      },
+      where: { id, tenantId, ...visibilityScope(role, userId), ...branchScope(req) },
+      include: REPAIR_DETAIL_INCLUDE,
     });
 
     if (!repair) return res.status(404).json({ message: 'Orden de reparación no encontrada.' });
@@ -154,14 +205,17 @@ const getById = async (req, res) => {
 
 /**
  * POST /api/repairs
- * TECH que crea una orden sin asignar técnico → se auto-asigna.
+ * Modelo pull: la orden SIEMPRE arranca sin técnico asignado, sin importar el
+ * rol de quien la carga. Un técnico la toma después con POST /repairs/:id/take.
+ * (Un OWNER/ADMIN/SELLER puede asignar manualmente después vía PUT como
+ * escape hatch, pero no al crear.)
  */
 const createRepair = async (req, res) => {
   try {
     const { tenantId, userId, role } = req.user;
     const {
       customerName, customerPhone, deviceModel, deviceColor, deviceImei,
-      faultType, faultDescription, technicianId, budget, estimatedDate,
+      faultType, faultDescription, budget, estimatedDate,
       internalNotes, customerId, tiendaId: bodyTiendaId,
     } = req.body;
 
@@ -189,9 +243,6 @@ const createRepair = async (req, res) => {
       tiendaId = req.user.tiendaId;
     }
 
-    // TECH sin técnico asignado → se asigna a sí mismo
-    const assignedTechId = role === 'TECH' && !technicianId ? userId : (technicianId || null);
-
     const repair = await prisma.$transaction(async (tx) => {
       const created = await tx.repairOrder.create({
         data: {
@@ -205,7 +256,8 @@ const createRepair = async (req, res) => {
           budget: budget ? parseFloat(budget) : null,
           estimatedDate: estimatedDate ? new Date(estimatedDate) : null,
           internalNotes: internalNotes || null,
-          technicianId: assignedTechId,
+          technicianId: null, // modelo pull — se toma después
+          createdById: userId,
           customerId: customerId || null,
           tenantId,
           tiendaId,
@@ -270,15 +322,7 @@ const updateRepair = async (req, res) => {
           ...(technicianId !== undefined && role !== 'TECH' && { technicianId: technicianId || null }),
           ...(faultDescription && { faultDescription }),
         },
-        include: {
-          technician: { select: { id: true, name: true, role: true } },
-          tienda: TIENDA_SELECT,
-          customer: true,
-          statusHistory: {
-            include: { changedBy: { select: { id: true, name: true } } },
-            orderBy: { createdAt: 'asc' },
-          },
-        },
+        include: REPAIR_DETAIL_INCLUDE,
       });
 
       if (statusChanged) {
@@ -298,6 +342,116 @@ const updateRepair = async (req, res) => {
     res.json(serializeRepair(updated));
   } catch (error) {
     console.error('[repairs:updateRepair]', error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * POST /api/repairs/:id/take
+ * Modelo pull: quien tenga acceso al módulo toma una orden SIN asignar. Atómico
+ * ante concurrencia — mismo patrón que la venta de IMEI (pos.controller): el
+ * UPDATE condicionado a `technicianId: null` toma el lock de fila en Postgres,
+ * así que si dos técnicos la toman a la vez uno gana (count=1) y el otro
+ * recibe 409, sin SELECT FOR UPDATE explícito.
+ */
+const takeRepair = async (req, res) => {
+  try {
+    const { tenantId, userId } = req.user;
+    const { id } = req.params;
+
+    const repair = await prisma.repairOrder.findFirst({
+      where: { id, tenantId, ...branchScope(req) },
+      select: { id: true, technicianId: true, status: true, createdById: true, customerName: true, deviceModel: true },
+    });
+    if (!repair) return res.status(404).json({ message: 'Orden no encontrada.' });
+    if (repair.technicianId) {
+      return res.status(409).json({ message: 'Esta orden ya fue tomada por otro técnico.' });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const claim = await tx.repairOrder.updateMany({
+        where: { id, technicianId: null },
+        data: { technicianId: userId },
+      });
+      if (claim.count === 0) throw new RepairAlreadyTakenError();
+
+      await tx.repairStatusHistory.create({
+        data: { status: repair.status, notes: 'Tomó la orden', repairId: id, changedById: userId },
+      });
+
+      return tx.repairOrder.findUnique({ where: { id }, include: REPAIR_DETAIL_INCLUDE });
+    });
+
+    // Avisar al empleado que cargó la orden que ya la tomó un técnico.
+    if (repair.createdById && repair.createdById !== userId) {
+      const me = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+      await notify({
+        tenantId,
+        userIds: [repair.createdById],
+        message: `${me?.name ?? 'Un técnico'} tomó la reparación de ${repair.customerName} (${repair.deviceModel}).`,
+        type: 'INFO',
+        link: `/repairs/${id}`,
+      });
+    }
+
+    res.json(serializeRepair(updated));
+  } catch (error) {
+    if (error instanceof RepairAlreadyTakenError) {
+      return res.status(409).json({ message: 'Esta orden ya fue tomada por otro técnico.' });
+    }
+    console.error('[repairs:takeRepair]', error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * POST /api/repairs/:id/comments
+ * Body: { body }
+ * Agrega un comentario al thread de la orden. `fromTech` se congela con el rol
+ * del autor en este momento. Notifica a la contraparte (empleado ↔ técnico).
+ * Mismo scope de acceso que el resto del módulo (roleScope + branchScope): un
+ * TECH sólo comenta órdenes asignadas a él.
+ */
+const addComment = async (req, res) => {
+  try {
+    const { tenantId, userId, role } = req.user;
+    const { id } = req.params;
+    const { body } = req.body;
+
+    if (!body?.trim()) {
+      return res.status(400).json({ message: 'El comentario no puede estar vacío.' });
+    }
+
+    // visibilityScope: un TECH puede comentar también en el pool sin asignar
+    // (ej. pedir una aclaración antes de tomarlo).
+    const repair = await prisma.repairOrder.findFirst({
+      where: { id, tenantId, ...visibilityScope(role, userId), ...branchScope(req) },
+      select: { id: true, technicianId: true, createdById: true, customerName: true, deviceModel: true },
+    });
+    if (!repair) return res.status(404).json({ message: 'Orden no encontrada.' });
+
+    const fromTech = role === 'TECH';
+
+    const comment = await prisma.repairComment.create({
+      data: { body: body.trim(), repairId: id, authorId: userId, fromTech },
+      include: { author: { select: { id: true, name: true, role: true } } },
+    });
+
+    // Notificar a la otra parte del thread.
+    const targetId = fromTech ? repair.createdById : repair.technicianId;
+    if (targetId && targetId !== userId) {
+      await notify({
+        tenantId,
+        userIds: [targetId],
+        message: `${comment.author.name} comentó en la reparación de ${repair.customerName} (${repair.deviceModel}).`,
+        type: 'INFO',
+        link: `/repairs/${id}`,
+      });
+    }
+
+    res.status(201).json(comment);
+  } catch (error) {
+    console.error('[repairs:addComment]', error);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
@@ -325,4 +479,4 @@ const deleteRepair = async (req, res) => {
   }
 };
 
-module.exports = { getStats, getTechnicians, getAll, getById, createRepair, updateRepair, deleteRepair };
+module.exports = { getStats, getTechnicians, getAll, getById, createRepair, updateRepair, takeRepair, addComment, deleteRepair };

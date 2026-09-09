@@ -51,6 +51,7 @@ async function wipe(tenantId) {
     await tx.cashSession.deleteMany({ where: { tenantId } });
     await tx.purchaseOrder.deleteMany({ where: { tenantId } });
     await tx.payment.deleteMany({ where: { tenantId } });
+    await tx.repairComment.deleteMany({ where: { repair: { tenantId } } }); // RESTRICT FK -> User(author): borrar ANTES que user
     await tx.repairOrder.deleteMany({ where: { tenantId } });
     await tx.customer.deleteMany({ where: { tenantId } });
     await tx.inventoryItem.deleteMany({ where: { tenantId } });
@@ -222,8 +223,12 @@ async function main() {
   });
   check('TECH POST /repairs',              techRepair.status, 201);
   const techRepairId = techRepair.data?.id;
-  check('TECH GET  /repairs/:id (propia)', (await req('GET',`/repairs/${techRepairId}`, T.TECH)).status, 200);
-  check('TECH PUT  /repairs/:id (propia)', (await req('PUT',`/repairs/${techRepairId}`, T.TECH, { internalNotes: 'diag' })).status, 200);
+  checkTrue('TECH POST /repairs: arranca SIN técnico (modelo pull)', techRepair.data?.technicianId == null);
+  check('TECH GET  /repairs/:id (pool sin asignar)', (await req('GET',`/repairs/${techRepairId}`, T.TECH)).status, 200);
+  check('TECH PUT  /repairs/:id sin haberla tomado -> 404', (await req('PUT',`/repairs/${techRepairId}`, T.TECH, { budget: 100 })).status, 404);
+  check('TECH POST /repairs/:id/take -> 200', (await req('POST',`/repairs/${techRepairId}/take`, T.TECH)).status, 200);
+  check('TECH POST /repairs/:id/take otra vez (ya tomada) -> 409', (await req('POST',`/repairs/${techRepairId}/take`, T.TECH)).status, 409);
+  check('TECH PUT  /repairs/:id (ya tomada) -> 200', (await req('PUT',`/repairs/${techRepairId}`, T.TECH, { budget: 100 })).status, 200);
   check('TECH DELETE /repairs/:id (reservado a OWNER/ADMIN/SELLER)', (await req('DELETE',`/repairs/${techRepairId}`, T.TECH)).status, 403);
 
   const techForbidden = [
@@ -484,6 +489,95 @@ async function main() {
 
   const posSale = await req('POST','/pos/sales', T.SELLER, {});
   checkTrue(`SELLER_A POST /pos/sales pasa authz (status ${posSale.status}, no 401/403)`, posSale.status !== 401 && posSale.status !== 403);
+
+  // ═══ PARTE E — modelo pull + thread de comentarios + notificaciones ══════
+  console.log('\n=== PARTE E: pull de reparaciones, comentarios y notificaciones dirigidas ===');
+
+  // -- E1: pool sin asignar, "Tomar ticket" atómico, filtro por tipo de falla --
+  const poolRep = await req('POST', '/repairs', sellerAtok, {
+    customerName: 'Pool', customerPhone: '5', deviceModel: 'iPhone X', faultType: 'WATER', faultDescription: 'pool', tiendaId: A,
+  });
+  checkTrue('E1 la reparación nace sin técnico', poolRep.data?.technicianId == null);
+  const poolUnassigned = await req('GET', '/repairs?assignment=unassigned', T.TECH);
+  checkTrue('E1 TECH ve el ticket en el pool (?assignment=unassigned)',
+    (poolUnassigned.data?.repairs ?? []).some((r) => r.id === poolRep.data.id));
+  const faultOther = await req('GET', '/repairs?faultType=WATER', T.TECH);
+  checkTrue('E1 filtro ?faultType=WATER trae el ticket', (faultOther.data?.repairs ?? []).some((r) => r.id === poolRep.data.id));
+  checkTrue('E1 filtro ?faultType=WATER solo trae fallas WATER',
+    (faultOther.data?.repairs ?? []).every((r) => r.faultType === 'WATER'));
+  check('E1 TECH toma el ticket -> 200', (await req('POST', `/repairs/${poolRep.data.id}/take`, T.TECH)).status, 200);
+  const afterTake = await req('GET', `/repairs/${poolRep.data.id}`, T.TECH);
+  check('E1 el ticket queda asignado al TECH', afterTake.data?.technician?.id, s.tech.id);
+  check('E1 tomar un ticket ya tomado -> 409', (await req('POST', `/repairs/${poolRep.data.id}/take`, T.TECH)).status, 409);
+  check('E1 SELLER_B (otra sucursal) toma un ticket de A -> 404',
+    (await req('POST', `/repairs/${poolRep.data.id}/take`, T.SELLER_B)).status, [404, 409]);
+
+  // -- E2: thread de comentarios + badge awaitingReplyFrom + notificaciones --
+  const eRep = await req('POST', '/repairs', sellerAtok, {
+    customerName: 'Thread', customerPhone: '7', deviceModel: 'iPhone SE', faultType: 'BATTERY', faultDescription: 'thread', tiendaId: A,
+  });
+  await req('POST', `/repairs/${eRep.data.id}/take`, T.TECH);
+  const sellerNotifBefore = (await req('GET', '/notifications', sellerAtok)).data?.count ?? 0;
+
+  check('E2 SELLER (mostrador) comenta -> 201',
+    (await req('POST', `/repairs/${eRep.data.id}/comments`, sellerAtok, { body: '¿cómo viene?' })).status, 201);
+  const eDetail1 = await req('GET', `/repairs/${eRep.data.id}`, sellerAtok);
+  check('E2 awaitingReplyFrom = TECNICO tras comentario del mostrador', eDetail1.data?.awaitingReplyFrom, 'TECNICO');
+  checkTrue('E2 el técnico recibió notificación con link a la reparación',
+    ((await req('GET', '/notifications', T.TECH)).data?.notifications ?? []).some((n) => n.link === `/repairs/${eRep.data.id}`));
+
+  check('E2 TECH (taller) comenta -> 201',
+    (await req('POST', `/repairs/${eRep.data.id}/comments`, T.TECH, { body: 'ya casi' })).status, 201);
+  const eDetail2 = await req('GET', `/repairs/${eRep.data.id}`, sellerAtok);
+  check('E2 awaitingReplyFrom = EMPLEADO tras comentario del taller', eDetail2.data?.awaitingReplyFrom, 'EMPLEADO');
+  checkTrue('E2 el empleado que cargó la orden recibió notificación',
+    ((await req('GET', '/notifications', sellerAtok)).data?.count ?? 0) > sellerNotifBefore);
+  check('E2 comentario vacío -> 400',
+    (await req('POST', `/repairs/${eRep.data.id}/comments`, sellerAtok, { body: '   ' })).status, 400);
+  check('E2 "Finalizar reparación" (PUT status READY) -> 200',
+    (await req('PUT', `/repairs/${eRep.data.id}`, sellerAtok, { status: 'READY', statusNote: 'Reparación finalizada' })).status, 200);
+
+  // -- E3: transferencia despachada -> notifica al SELLER de la sucursal destino --
+  const eTransfer = await req('POST', '/stock-transfers/items', sellerAtok, { inventoryItemId: s.itemsA[3].id, toTiendaId: B });
+  const sellerBNotifBefore = ((await req('GET', '/notifications', T.SELLER_B)).data?.notifications ?? [])
+    .filter((n) => n.link === `/transfers/${eTransfer.data.id}`).length;
+  check('E3 SELLER_A despacha el lote -> 200',
+    (await req('POST', `/stock-transfers/${eTransfer.data.id}/dispatch`, sellerAtok, { deliveryId: s.delivery.id })).status, 200);
+  checkTrue('E3 SELLER_B (sucursal destino) recibió notificación "en camino"',
+    ((await req('GET', '/notifications', T.SELLER_B)).data?.notifications ?? [])
+      .filter((n) => n.link === `/transfers/${eTransfer.data.id}`).length > sellerBNotifBefore);
+  checkTrue('E3 SELLER_A (origen) NO recibió esa notificación',
+    !((await req('GET', '/notifications', sellerAtok)).data?.notifications ?? []).some((n) => n.link === `/transfers/${eTransfer.data.id}`));
+
+  // -- E4: respuesta en ticket de soporte -> notifica a quien lo abrió --
+  const eTicket = await req('POST', '/tickets', sellerAtok, { title: 'Notif ticket', description: 'x', category: 'CONSULTA_GENERAL' });
+  const saTok = await login(s.owner.email); // el OWNER responde (no es SUPERADMIN, pero es "otro" respecto del autor)
+  const openerNotifBefore = ((await req('GET', '/notifications', sellerAtok)).data?.notifications ?? [])
+    .filter((n) => n.link === `/tickets/${eTicket.data.id}`).length;
+  check('E4 OWNER responde el ticket -> 201',
+    (await req('POST', `/tickets/${eTicket.data.id}/reply`, saTok, { message: 'respuesta' })).status, 201);
+  checkTrue('E4 el autor del ticket recibió notificación',
+    ((await req('GET', '/notifications', sellerAtok)).data?.notifications ?? [])
+      .filter((n) => n.link === `/tickets/${eTicket.data.id}`).length > openerNotifBefore);
+
+  // -- E5: Configuración → Usuarios --
+  check('E5 SELLER GET /users -> 200', (await req('GET', '/users', T.SELLER)).status, 200);
+  check('E5 TECH GET /users -> 403', (await req('GET', '/users', T.TECH)).status, 403);
+  const usersList = await req('GET', '/users', T.OWNER);
+  checkTrue('E5 GET /users no incluye SUPERADMIN y trae los usuarios del tenant',
+    (usersList.data?.users ?? []).length >= 4 && (usersList.data.users).every((u) => u.role !== 'SUPERADMIN'));
+  const sellerRow = (usersList.data?.users ?? []).find((u) => u.email === s.seller.email);
+  check('E5 SELLER PUT /users/:id/tienda (no es OWNER) -> 403',
+    (await req('PUT', `/users/${sellerRow.id}/tienda`, T.SELLER, { tiendaId: B })).status, 403);
+  const sellerRt = (await loginFull(s.seller.email)).refreshToken;
+  check('E5 refresh del SELLER antes de reasignar -> 200',
+    (await req('POST', '/auth/refresh', null, { refreshToken: sellerRt })).status, 200);
+  check('E5 OWNER PUT /users/:id/tienda (reasigna a B) -> 200',
+    (await req('PUT', `/users/${sellerRow.id}/tienda`, T.OWNER, { tiendaId: B })).status, 200);
+  check('E5 la reasignación invalidó la sesión del empleado (refresh -> 401)',
+    (await req('POST', '/auth/refresh', null, { refreshToken: sellerRt })).status, 401);
+  check('E5 OWNER PUT /users/:id/tienda sucursal inexistente -> 400',
+    (await req('PUT', `/users/${sellerRow.id}/tienda`, T.OWNER, { tiendaId: 'no-existe' })).status, 400);
 
   console.log('\n[teardown] borrando tenant descartable...');
   await wipe(s.tenant.id);

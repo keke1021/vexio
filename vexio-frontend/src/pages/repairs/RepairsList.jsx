@@ -39,6 +39,9 @@ const STATUS_TABS = [
 const formatDate = (d) => d ? new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) : '—';
 const refId = (id) => id.slice(-5).toUpperCase();
 
+const AWAITING_SHORT = { EMPLEADO: 'Responde empleado', TECNICO: 'Responde técnico' };
+const TERMINAL_STATUSES = ['READY', 'DELIVERED', 'CANCELLED'];
+
 export const StatusBadge = ({ status, size = 'sm' }) => {
   const cfg = STATUS_CONFIG[status] ?? { label: status, cls: 'text-[#64748B] bg-[#F1F5F9]' };
   return (
@@ -58,15 +61,19 @@ const RepairsList = () => {
 
   const [statusFilter, setStatusFilter] = useState('');
   const [techFilter, setTechFilter] = useState('');
+  const [faultFilter, setFaultFilter] = useState('');
+  const [assignmentFilter, setAssignmentFilter] = useState(''); // '' | 'mine' | 'unassigned'
   const [search, setSearch] = useState('');
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['repairs', statusFilter, techFilter, search],
+    queryKey: ['repairs', statusFilter, techFilter, faultFilter, assignmentFilter, search],
     queryFn: () =>
       api.get('/repairs', {
         params: {
           status: statusFilter || undefined,
           technicianId: techFilter || undefined,
+          faultType: faultFilter || undefined,
+          assignment: assignmentFilter || undefined,
           search: search || undefined,
         },
       }).then((r) => r.data),
@@ -131,6 +138,29 @@ const RepairsList = () => {
           className="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#0F172A]
             placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-colors w-64"
         />
+        <select
+          value={faultFilter}
+          onChange={(e) => setFaultFilter(e.target.value)}
+          className="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#64748B]
+            focus:outline-none focus:border-[#3B82F6] transition-colors"
+        >
+          <option value="">Todos los tipos de falla</option>
+          {Object.entries(FAULT_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+        {isTech && (
+          <select
+            value={assignmentFilter}
+            onChange={(e) => setAssignmentFilter(e.target.value)}
+            className="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#64748B]
+              focus:outline-none focus:border-[#3B82F6] transition-colors"
+          >
+            <option value="">Míos y sin asignar</option>
+            <option value="unassigned">Sin asignar</option>
+            <option value="mine">Míos</option>
+          </select>
+        )}
         {['OWNER', 'ADMIN', 'SELLER'].includes(user?.role) && (
           <select
             value={techFilter}
@@ -194,8 +224,21 @@ const RepairsList = () => {
                   <td className="px-4 py-3.5 text-[#475569] hidden md:table-cell">{r.tienda?.name ?? '—'}</td>
                 )}
                 <td className="px-4 py-3.5 text-[#475569] hidden md:table-cell">{FAULT_LABELS[r.faultType]}</td>
-                <td className="px-4 py-3.5"><StatusBadge status={r.status} /></td>
-                <td className="px-4 py-3.5 text-[#475569] hidden lg:table-cell">{r.technician?.name ?? '—'}</td>
+                <td className="px-4 py-3.5">
+                  <div className="flex flex-col gap-1 items-start">
+                    <StatusBadge status={r.status} />
+                    {r.awaitingReplyFrom && !TERMINAL_STATUSES.includes(r.status) && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-600 ring-1 ring-amber-200">
+                        {AWAITING_SHORT[r.awaitingReplyFrom]}
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-4 py-3.5 hidden lg:table-cell">
+                  {r.technician?.name
+                    ? <span className="text-[#475569]">{r.technician.name}</span>
+                    : <span className="text-[#3B82F6]">Sin asignar</span>}
+                </td>
                 <td className="px-4 py-3.5 text-right text-[#64748B] hidden lg:table-cell">
                   {r.budget != null
                     ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(r.budget)

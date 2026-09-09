@@ -32,6 +32,118 @@ const formatDateTime = (d) =>
 
 const refId = (id) => id?.slice(-5).toUpperCase();
 
+// Estados en los que la reparación ya está cerrada / resuelta: no tiene sentido
+// mostrar "esperando respuesta de …" ni el botón de finalizar.
+const TERMINAL_STATUSES = ['READY', 'DELIVERED', 'CANCELLED'];
+const AWAITING_LABEL = { EMPLEADO: 'el empleado', TECNICO: 'el técnico' };
+
+// ─── Conversación (thread de comentarios) ─────────────────────────────────────
+
+const Conversation = ({ repair }) => {
+  const queryClient = useQueryClient();
+  const [text, setText] = useState('');
+  const comments = repair.comments ?? [];
+  const isTerminal = TERMINAL_STATUSES.includes(repair.status);
+  const awaiting = isTerminal ? null : repair.awaitingReplyFrom;
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['repair', repair.id] });
+    queryClient.invalidateQueries({ queryKey: ['repairs'] });
+    queryClient.invalidateQueries({ queryKey: ['repairs-stats'] });
+  };
+
+  const addComment = useMutation({
+    mutationFn: (body) => api.post(`/repairs/${repair.id}/comments`, { body }).then((r) => r.data),
+    onSuccess: () => { setText(''); invalidate(); },
+  });
+
+  const finish = useMutation({
+    mutationFn: () =>
+      api.put(`/repairs/${repair.id}`, { status: 'READY', statusNote: 'Reparación finalizada' }).then((r) => r.data),
+    onSuccess: invalidate,
+  });
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (text.trim()) addComment.mutate(text.trim());
+  };
+
+  const onFinish = () => {
+    if (window.confirm('¿Finalizar la reparación? Pasa a "Listo para entregar".')) finish.mutate();
+  };
+
+  return (
+    <div className="border border-[#E2E8F0] rounded-xl bg-white mb-5" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+      <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-[#E2E8F0]">
+        <p className="text-[11px] text-[#475569] uppercase tracking-wider">Conversación</p>
+        {awaiting && (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 text-amber-600 text-[11px] font-medium ring-1 ring-amber-200">
+            Esperando respuesta de {AWAITING_LABEL[awaiting]}
+          </span>
+        )}
+      </div>
+
+      <div className="px-5 py-4 space-y-4">
+        {repair.internalNotes && (
+          <div className="rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] px-3 py-2">
+            <p className="text-[10px] text-[#94A3B8] uppercase tracking-wider mb-1">Nota heredada</p>
+            <p className="text-[13px] text-[#475569] whitespace-pre-wrap">{repair.internalNotes}</p>
+          </div>
+        )}
+
+        {comments.length === 0 && !repair.internalNotes && (
+          <p className="text-[13px] text-[#94A3B8]">Sin comentarios todavía.</p>
+        )}
+
+        {comments.map((c) => (
+          <div key={c.id}>
+            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                c.fromTech ? 'bg-[#EFF6FF] text-[#3B82F6]' : 'bg-[#F1F5F9] text-[#475569]'
+              }`}>
+                {c.fromTech ? 'Taller' : 'Mostrador'}
+              </span>
+              <span className="text-[12px] text-[#0F172A] font-medium">{c.author?.name}</span>
+              <span className="text-[11px] text-[#94A3B8]">{formatDateTime(c.createdAt)}</span>
+            </div>
+            <p className="text-[13px] text-[#334155] whitespace-pre-wrap">{c.body}</p>
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={submit} className="px-5 pb-5 pt-1">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Escribí un comentario..."
+          rows={2}
+          className="w-full bg-white border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-[13px] text-[#0F172A]
+            placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-colors resize-none"
+        />
+        <div className="flex items-center justify-between gap-3 mt-3">
+          <button
+            type="submit"
+            disabled={!text.trim() || addComment.isPending}
+            className="bg-[#3B82F6] hover:bg-[#2563EB] disabled:opacity-40 text-white text-[13px] font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            {addComment.isPending ? 'Enviando...' : 'Enviar comentario'}
+          </button>
+          {!isTerminal && (
+            <button
+              type="button"
+              onClick={onFinish}
+              disabled={finish.isPending}
+              className="text-[13px] font-medium text-emerald-600 hover:text-emerald-700 disabled:opacity-40 transition-colors"
+            >
+              {finish.isPending ? '...' : 'Finalizar reparación'}
+            </button>
+          )}
+        </div>
+      </form>
+    </div>
+  );
+};
+
 // ─── Timeline ─────────────────────────────────────────────────────────────────
 
 const Timeline = ({ history }) => (
@@ -187,12 +299,23 @@ const RepairsDetail = () => {
     },
   });
 
+  const [takeError, setTakeError] = useState('');
+  const takeMutation = useMutation({
+    mutationFn: () => api.post(`/repairs/${id}/take`).then((r) => r.data),
+    onMutate: () => setTakeError(''),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['repair', id] });
+      queryClient.invalidateQueries({ queryKey: ['repairs'] });
+      queryClient.invalidateQueries({ queryKey: ['repairs-stats'] });
+    },
+    onError: (err) => setTakeError(err.response?.data?.message || 'No se pudo tomar la orden.'),
+  });
+
   const startEdit = () => {
     setEditForm({
       technicianId: repair.technicianId ?? '',
       budget: repair.budget ?? '',
       estimatedDate: repair.estimatedDate ? repair.estimatedDate.split('T')[0] : '',
-      internalNotes: repair.internalNotes ?? '',
       faultDescription: repair.faultDescription,
     });
     setIsEditing(true);
@@ -235,6 +358,23 @@ const RepairsDetail = () => {
         </div>
       </div>
 
+      {!repair.technicianId && !['DELIVERED', 'CANCELLED'].includes(repair.status) && (
+        <div className="border border-[#3B82F6]/30 bg-[#EFF6FF]/50 rounded-xl px-5 py-4 mb-5 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-[13px] font-medium text-[#0F172A]">Sin técnico asignado</p>
+            <p className="text-[12px] text-[#475569] mt-0.5">Tomá el ticket para trabajarlo.</p>
+            {takeError && <p className="text-[12px] text-red-500 mt-1">{takeError}</p>}
+          </div>
+          <button
+            onClick={() => takeMutation.mutate()}
+            disabled={takeMutation.isPending}
+            className="shrink-0 bg-[#3B82F6] hover:bg-[#2563EB] disabled:opacity-40 text-white text-[13px] font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            {takeMutation.isPending ? 'Tomando...' : 'Tomar ticket'}
+          </button>
+        </div>
+      )}
+
       <div className="border border-[#E2E8F0] rounded-xl px-5 mb-5 bg-white"
         style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
         <Row label="Cliente">{repair.customerName}</Row>
@@ -244,12 +384,11 @@ const RepairsDetail = () => {
         {repair.tienda?.name && <Row label="Sucursal de origen">{repair.tienda.name}</Row>}
         <Row label="Tipo de falla">{FAULT_LABELS[repair.faultType]}</Row>
         <Row label="Descripción">{repair.faultDescription}</Row>
-        <Row label="Técnico">{repair.technician?.name}</Row>
+        <Row label="Técnico">{repair.technician?.name ?? <span className="text-[#94A3B8]">Sin asignar</span>}</Row>
         <Row label="Presupuesto">{formatCurrency(repair.budget)}</Row>
         <Row label="Entrega estimada">{formatDate(repair.estimatedDate)}</Row>
         {repair.readyAt && <Row label="Listo el">{formatDate(repair.readyAt)}</Row>}
         {repair.deliveredAt && <Row label="Entregado el">{formatDate(repair.deliveredAt)}</Row>}
-        {repair.internalNotes && <Row label="Notas">{repair.internalNotes}</Row>}
       </div>
 
       {canEdit && !isEditing && (
@@ -307,15 +446,6 @@ const RepairsDetail = () => {
                 className="w-full bg-white border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#3B82F6] resize-none"
               />
             </div>
-            <div>
-              <label className="block text-[13px] font-medium text-[#64748B] mb-1.5">Notas internas</label>
-              <textarea
-                value={editForm.internalNotes}
-                onChange={(e) => setEditForm((p) => ({ ...p, internalNotes: e.target.value }))}
-                rows={2}
-                className="w-full bg-white border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-[13px] text-[#0F172A] focus:outline-none focus:border-[#3B82F6] resize-none"
-              />
-            </div>
             <div className="flex gap-3">
               <button
                 onClick={() => updateMutation.mutate(editForm)}
@@ -331,6 +461,8 @@ const RepairsDetail = () => {
           </div>
         </div>
       )}
+
+      <Conversation repair={repair} />
 
       {repair.statusHistory?.length > 0 && (
         <div className="mb-2">
