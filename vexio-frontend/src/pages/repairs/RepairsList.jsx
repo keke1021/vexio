@@ -51,9 +51,10 @@ export const StatusBadge = ({ status, size = 'sm' }) => {
 };
 
 const RepairsList = () => {
-  const { user } = useAuth();
+  const { user, activeTienda } = useAuth();
   const navigate = useNavigate();
   const canWrite = ['OWNER', 'ADMIN', 'SELLER', 'TECH'].includes(user?.role);
+  const isTech = user?.role === 'TECH';
 
   const [statusFilter, setStatusFilter] = useState('');
   const [techFilter, setTechFilter] = useState('');
@@ -89,6 +90,9 @@ const RepairsList = () => {
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Reparaciones</h1>
           <p className="text-[13px] text-[#475569] mt-0.5">
+            {(isTech ? 'Todas las sucursales' : activeTienda?.name) && (
+              <span>{isTech ? 'Todas las sucursales' : activeTienda?.name} · </span>
+            )}
             {isLoading ? '...' : `${total} orden${total !== 1 ? 'es' : ''}`}
           </p>
         </div>
@@ -150,6 +154,9 @@ const RepairsList = () => {
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">#</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Cliente</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden sm:table-cell">Equipo</th>
+              {isTech && (
+                <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Sucursal</th>
+              )}
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Falla</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Estado</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden lg:table-cell">Técnico</th>
@@ -159,14 +166,14 @@ const RepairsList = () => {
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={8} className="text-center py-16 text-[#64748B]">Cargando...</td></tr>
+              <tr><td colSpan={isTech ? 9 : 8} className="text-center py-16 text-[#64748B]">Cargando...</td></tr>
             )}
             {isError && (
-              <tr><td colSpan={8} className="text-center py-16 text-red-400">Error al cargar las órdenes.</td></tr>
+              <tr><td colSpan={isTech ? 9 : 8} className="text-center py-16 text-red-400">Error al cargar las órdenes.</td></tr>
             )}
             {!isLoading && !isError && repairs.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center py-16 text-[#64748B]">
+                <td colSpan={isTech ? 9 : 8} className="text-center py-16 text-[#64748B]">
                   No hay órdenes{statusFilter ? ` con estado "${STATUS_CONFIG[statusFilter]?.label}"` : ''}.
                 </td>
               </tr>
@@ -183,6 +190,9 @@ const RepairsList = () => {
                   <p className="text-[#475569] text-[11px]">{r.customerPhone}</p>
                 </td>
                 <td className="px-4 py-3.5 text-[#64748B] hidden sm:table-cell">{r.deviceModel}</td>
+                {isTech && (
+                  <td className="px-4 py-3.5 text-[#475569] hidden md:table-cell">{r.tienda?.name ?? '—'}</td>
+                )}
                 <td className="px-4 py-3.5 text-[#475569] hidden md:table-cell">{FAULT_LABELS[r.faultType]}</td>
                 <td className="px-4 py-3.5"><StatusBadge status={r.status} /></td>
                 <td className="px-4 py-3.5 text-[#475569] hidden lg:table-cell">{r.technician?.name ?? '—'}</td>

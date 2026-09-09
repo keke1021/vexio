@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import PrivateRoute from './components/PrivateRoute';
+import BranchGate from './components/BranchGate';
 import RoleRoute from './components/RoleRoute';
 import AdminRoute from './components/AdminRoute';
 import Layout from './components/Layout';
@@ -49,6 +50,7 @@ const App = () => (
       <Route path="/register" element={<Navigate to="/login" replace />} />
 
       <Route element={<PrivateRoute />}>
+       <Route element={<BranchGate />}>
         <Route element={<Layout />}>
           {/* Inicio (dashboard de Reportes) + Soporte: tier completo
               (OWNER/ADMIN/SELLER). TECH no — RoleRoute sin `module` lo manda
@@ -105,6 +107,7 @@ const App = () => (
               autenticados, incluido TECH (self-service de cuenta). */}
           <Route path="/settings/password" element={<ChangePassword />} />
         </Route>
+       </Route>
       </Route>
 
       <Route element={<AdminRoute />}>

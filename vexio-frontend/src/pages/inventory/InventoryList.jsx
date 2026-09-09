@@ -80,9 +80,8 @@ const AlertsBanner = () => {
 
 // ─── Bulk Upload Modal ────────────────────────────────────────────────────────
 
-const BulkUploadModal = ({ tiendas, onClose, onSuccess }) => {
+const BulkUploadModal = ({ activeTienda, onClose, onSuccess }) => {
   const [file, setFile] = useState(null);
-  const [tiendaId, setTiendaId] = useState(tiendas.length === 1 ? tiendas[0].id : '');
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState(null);
@@ -100,7 +99,7 @@ const BulkUploadModal = ({ tiendas, onClose, onSuccess }) => {
   };
 
   const handleUpload = async () => {
-    if (!file || !tiendaId) return;
+    if (!file) return;
     setUploading(true);
     setProgress(10);
 
@@ -111,7 +110,6 @@ const BulkUploadModal = ({ tiendas, onClose, onSuccess }) => {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('tiendaId', tiendaId);
       const { data } = await api.post('/inventory/bulk-upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -146,27 +144,10 @@ const BulkUploadModal = ({ tiendas, onClose, onSuccess }) => {
 
         {!result ? (
           <>
-            {tiendas.length > 1 && (
+            {activeTienda && (
               <div className="border border-[#E2E8F0] rounded-xl p-4 mb-3">
-                <p className="text-[13px] text-[#0F172A] font-medium mb-2">Sucursal que recibe la carga</p>
-                <select
-                  value={tiendaId}
-                  onChange={(e) => setTiendaId(e.target.value)}
-                  className="w-full bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#64748B]
-                    focus:outline-none focus:border-[#3B82F6] transition-all"
-                >
-                  <option value="">Seleccioná una sucursal</option>
-                  {tiendas.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {tiendas.length === 0 && (
-              <div className="border border-amber-200 bg-amber-50 rounded-xl p-4 mb-3">
-                <p className="text-[13px] text-amber-600">
-                  Todavía no hay ninguna sucursal creada — hace falta al menos una para poder cargar equipos.
+                <p className="text-[13px] text-[#475569]">
+                  Los equipos van a ingresar a la sucursal <span className="text-[#0F172A] font-medium">{activeTienda.name}</span>.
                 </p>
               </div>
             )}
@@ -222,7 +203,7 @@ const BulkUploadModal = ({ tiendas, onClose, onSuccess }) => {
               </button>
               <button
                 onClick={handleUpload}
-                disabled={!file || !tiendaId || uploading}
+                disabled={!file || uploading}
                 className="bg-[#3B82F6] hover:bg-[#2563EB] disabled:opacity-40 disabled:cursor-not-allowed
                   text-white text-[13px] font-medium px-4 py-2 rounded-lg transition-colors"
               >
@@ -285,7 +266,7 @@ const BulkUploadModal = ({ tiendas, onClose, onSuccess }) => {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const InventoryList = () => {
-  const { user } = useAuth();
+  const { user, activeTienda } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const canWrite = ['OWNER', 'ADMIN', 'SELLER'].includes(user?.role);
@@ -301,7 +282,6 @@ const InventoryList = () => {
   const [debouncedImei, setDebouncedImei] = useState('');
   const [condition, setCondition] = useState('');
   const [status, setStatus] = useState('');
-  const [tiendaId, setTiendaId] = useState('');
   const [page, setPage] = useState(1);
   const [showBulkModal, setShowBulkModal] = useState(false);
 
@@ -319,17 +299,10 @@ const InventoryList = () => {
   // "parado" en una página 4 que ya no existe para el filtro nuevo.
   useEffect(() => {
     setPage(1);
-  }, [debouncedModelo, debouncedImei, condition, status, tiendaId]);
-
-  const { data: tiendasData } = useQuery({
-    queryKey: ['tiendas'],
-    queryFn: () => api.get('/tiendas').then((r) => r.data),
-    staleTime: 5 * 60_000,
-  });
-  const tiendas = tiendasData?.tiendas ?? [];
+  }, [debouncedModelo, debouncedImei, condition, status]);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['inventory', debouncedModelo, debouncedImei, condition, status, tiendaId, page],
+    queryKey: ['inventory', debouncedModelo, debouncedImei, condition, status, page],
     queryFn: () =>
       api.get('/inventory', {
         params: {
@@ -337,7 +310,6 @@ const InventoryList = () => {
           imei: debouncedImei || undefined,
           condition: condition || undefined,
           status: status || undefined,
-          tiendaId: tiendaId || undefined,
           page,
           pageSize: PAGE_SIZE,
         },
@@ -371,6 +343,7 @@ const InventoryList = () => {
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Inventario</h1>
           <p className="text-[13px] text-[#475569] mt-0.5">
+            {activeTienda ? `${activeTienda.name} · ` : ''}
             {isLoading ? '...' : total === 0
               ? '0 equipos'
               : `Mostrando ${rangeStart}-${rangeEnd} de ${total} equipo${total !== 1 ? 's' : ''}`}
@@ -437,19 +410,6 @@ const InventoryList = () => {
           <option value="RESERVED">Reservado</option>
           <option value="IN_TRANSIT">En tránsito</option>
         </select>
-        {tiendas.length > 1 && (
-          <select
-            value={tiendaId}
-            onChange={(e) => setTiendaId(e.target.value)}
-            className="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#64748B]
-              focus:outline-none focus:border-[#3B82F6] transition-colors"
-          >
-            <option value="">Todas las sucursales</option>
-            {tiendas.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-        )}
       </div>
 
       <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white"
@@ -460,9 +420,6 @@ const InventoryList = () => {
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">IMEI</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Modelo</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Condición</th>
-              {tiendas.length > 1 && (
-                <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Sucursal</th>
-              )}
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Estado</th>
               <th className="text-right px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden lg:table-cell">Precio</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden lg:table-cell">Moneda</th>
@@ -474,17 +431,17 @@ const InventoryList = () => {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={tiendas.length > 1 ? 10 : 9} className="text-center py-16 text-[#64748B] text-[13px]">Cargando...</td>
+                <td colSpan={9} className="text-center py-16 text-[#64748B] text-[13px]">Cargando...</td>
               </tr>
             )}
             {isError && (
               <tr>
-                <td colSpan={tiendas.length > 1 ? 10 : 9} className="text-center py-16 text-red-400 text-[13px]">Error al cargar el inventario.</td>
+                <td colSpan={9} className="text-center py-16 text-red-400 text-[13px]">Error al cargar el inventario.</td>
               </tr>
             )}
             {!isLoading && !isError && items.length === 0 && (
               <tr>
-                <td colSpan={tiendas.length > 1 ? 10 : 9} className="text-center py-16 text-[#64748B] text-[13px]">No hay equipos que coincidan con los filtros.</td>
+                <td colSpan={9} className="text-center py-16 text-[#64748B] text-[13px]">No hay equipos que coincidan con los filtros.</td>
               </tr>
             )}
             {items.map((item) => {
@@ -505,11 +462,6 @@ const InventoryList = () => {
                   <td className="px-4 py-3.5 text-[#64748B] hidden md:table-cell">
                     {CONDITIONS[item.condition]}
                   </td>
-                  {tiendas.length > 1 && (
-                    <td className="px-4 py-3.5 text-[#475569] hidden md:table-cell">
-                      {item.tienda?.name ?? '—'}
-                    </td>
-                  )}
                   <td className="px-4 py-3.5">
                     <span className={`inline-flex px-2 py-0.5 rounded-md text-[11px] font-medium ${badge.cls}`}>
                       {badge.label}
@@ -571,7 +523,7 @@ const InventoryList = () => {
 
       {showBulkModal && (
         <BulkUploadModal
-          tiendas={tiendas}
+          activeTienda={activeTienda}
           onClose={() => setShowBulkModal(false)}
           onSuccess={handleBulkSuccess}
         />

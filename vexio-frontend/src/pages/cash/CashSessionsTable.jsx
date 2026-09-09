@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../api/axios';
@@ -17,37 +17,22 @@ const fmtDateTime = (d) =>
   d ? new Date(d).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
 
 /**
- * Tabla + paginación del historial de CashSession — extraída de
- * CashSessionsHistory.jsx para poder reusarla también embebida en
- * CashMain.jsx (misma consulta a GET /cash/sessions, mismo shape de fila).
- * No decide layout de página (breadcrumb, título, selector de sucursal) —
- * eso lo resuelve cada caller; acá solo vive la tabla en sí.
- *
- * `tiendaId` opcional: si viene, filtra a esa sucursal (mismo query param
- * que ya acepta el backend). `showTiendaColumn` en false oculta la columna
- * "Sucursal" — tiene sentido apagarla cuando el caller ya está scopeado a
- * una sola sucursal (ej. CashMain), para no repetir el mismo nombre en cada fila.
+ * Tabla + paginación del historial de CashSession de la SUCURSAL ACTIVA
+ * (GET /cash/sessions, ya scopeado server-side por el JWT). Reusada embebida
+ * en CashMain.jsx y como pantalla propia en CashSessionsHistory.jsx.
  */
-const CashSessionsTable = ({ tiendaId, showTiendaColumn = true, pageSize = 20 }) => {
+const CashSessionsTable = ({ pageSize = 20 }) => {
   const [page, setPage] = useState(1);
 
-  // Volver a la página 1 cuando cambia el filtro de sucursal — mismo
-  // comportamiento que tenía el onChange del selector en CashSessionsHistory.
-  useEffect(() => {
-    setPage(1);
-  }, [tiendaId]);
-
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['cash-sessions', tiendaId ?? '', page, pageSize],
-    queryFn: () =>
-      api.get('/cash/sessions', { params: { tiendaId: tiendaId || undefined, page, pageSize } })
-        .then((r) => r.data),
+    queryKey: ['cash-sessions', page, pageSize],
+    queryFn: () => api.get('/cash/sessions', { params: { page, pageSize } }).then((r) => r.data),
     staleTime: 30_000,
   });
 
   const sessions = data?.sessions ?? [];
   const totalPages = data?.totalPages ?? 1;
-  const colSpan = showTiendaColumn ? 6 : 5;
+  const colSpan = 5;
 
   return (
     <div>
@@ -58,9 +43,6 @@ const CashSessionsTable = ({ tiendaId, showTiendaColumn = true, pageSize = 20 })
             <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Apertura</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Cierre</th>
-              {showTiendaColumn && (
-                <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden sm:table-cell">Sucursal</th>
-              )}
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Abrió</th>
               <th className="text-left px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider hidden md:table-cell">Cerró</th>
               <th className="text-right px-4 py-3 text-[11px] font-medium text-[#475569] uppercase tracking-wider">Balance final</th>
@@ -95,9 +77,6 @@ const CashSessionsTable = ({ tiendaId, showTiendaColumn = true, pageSize = 20 })
                       <span className="text-[#64748B]">{fmtDateTime(s.closedAt)}</span>
                     )}
                   </td>
-                  {showTiendaColumn && (
-                    <td className="px-4 py-3.5 text-[#475569] hidden sm:table-cell">{s.tienda?.name ?? '—'}</td>
-                  )}
                   <td className="px-4 py-3.5 text-[#475569] hidden md:table-cell">{s.openedBy?.name ?? '—'}</td>
                   <td className="px-4 py-3.5 text-[#475569] hidden md:table-cell">{s.closedBy?.name ?? '—'}</td>
                   <td className="px-4 py-3.5 text-right tabular-nums">

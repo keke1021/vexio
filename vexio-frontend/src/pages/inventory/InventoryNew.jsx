@@ -2,6 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/axios';
+import { useAuth } from '../../context/AuthContext';
 
 const STORAGE_OPTIONS = ['64GB', '128GB', '256GB', '512GB', '1TB'];
 const CONDITION_OPTIONS = [
@@ -55,6 +56,7 @@ const InventoryNew = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const imeiRef = useRef(null);
+  const { activeTienda } = useAuth();
 
   const [form, setForm] = useState({
     productName: '',
@@ -66,7 +68,6 @@ const InventoryNew = () => {
     currencyCode: 'ARS',
     salePrice: '',
     supplierId: '',
-    tiendaId: '',
     accessories: [],
     notes: '',
   });
@@ -82,23 +83,6 @@ const InventoryNew = () => {
     queryFn: () => api.get('/suppliers').then((r) => r.data),
     staleTime: 5 * 60_000,
   });
-
-  const { data: tiendasData } = useQuery({
-    queryKey: ['tiendas'],
-    queryFn: () => api.get('/tiendas').then((r) => r.data),
-    staleTime: 5 * 60_000,
-  });
-  const tiendas = tiendasData?.tiendas ?? [];
-
-  // Si el tenant tiene una sola sucursal (caso más común hoy), la
-  // preseleccionamos sola — no tiene sentido pedirle al usuario que elija
-  // entre una sola opción.
-  useEffect(() => {
-    if (tiendas.length === 1 && !form.tiendaId) {
-      setForm((prev) => ({ ...prev, tiendaId: tiendas[0].id }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tiendas.length]);
 
   const set = (key) => (e) => {
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
@@ -158,7 +142,11 @@ const InventoryNew = () => {
         <span className="text-[13px] text-[#64748B]">Nuevo equipo</span>
       </div>
 
-      <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A] mb-8">Agregar equipo</h1>
+      <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Agregar equipo</h1>
+      {activeTienda && (
+        <p className="text-[13px] text-[#475569] mt-0.5 mb-8">Ingresa a la sucursal: {activeTienda.name}</p>
+      )}
+      {!activeTienda && <div className="mb-8" />}
 
       <form onSubmit={handleSubmit} className="space-y-7">
 
@@ -292,24 +280,6 @@ const InventoryNew = () => {
           </div>
         </div>
 
-        {tiendas.length > 1 && (
-          <div>
-            <Label>Sucursal</Label>
-            <Select value={form.tiendaId} onChange={set('tiendaId')} required>
-              <option value="">Seleccioná una sucursal</option>
-              {tiendas.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </Select>
-          </div>
-        )}
-
-        {tiendas.length === 0 && (
-          <p className="text-[13px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-            Todavía no hay ninguna sucursal creada — hace falta al menos una para poder cargar equipos.
-          </p>
-        )}
-
         <div>
           <Label>Proveedor</Label>
           <Select value={form.supplierId} onChange={set('supplierId')}>
@@ -360,7 +330,7 @@ const InventoryNew = () => {
         <div className="flex items-center gap-3 pt-2">
           <button
             type="submit"
-            disabled={mutation.isPending || !form.tiendaId}
+            disabled={mutation.isPending}
             className="bg-[#3B82F6] hover:bg-[#2563EB] text-white text-[13px] font-medium px-6 py-2.5
               rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >

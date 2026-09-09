@@ -18,9 +18,18 @@ const readLocalStorage = (key) => {
   }
 };
 
+const writeLocalStorage = (key, value) => {
+  if (value == null) localStorage.removeItem(key);
+  else localStorage.setItem(key, JSON.stringify(value));
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => readLocalStorage('vexio_user'));
   const [tenant, setTenant] = useState(() => readLocalStorage('vexio_tenant'));
+  // Sucursal activa de la sesión ({ id, name }) — null mientras un OWNER/ADMIN
+  // multi-sucursal no eligió. `availableTiendas`: opciones para el selector.
+  const [activeTienda, setActiveTienda] = useState(() => readLocalStorage('vexio_active_tienda'));
+  const [availableTiendas, setAvailableTiendas] = useState(() => readLocalStorage('vexio_available_tiendas') ?? []);
   // `loading` es true mientras verificamos si el refresh token guardado sigue siendo válido
   const [loading, setLoading] = useState(true);
 
@@ -40,8 +49,19 @@ export const AuthProvider = ({ children }) => {
         // Sync activeModules in case admin changed them since last login
         if (data.tenant) {
           const updated = { ...readLocalStorage('vexio_tenant'), ...data.tenant };
-          localStorage.setItem('vexio_tenant', JSON.stringify(updated));
+          writeLocalStorage('vexio_tenant', updated);
           setTenant(updated);
+        }
+        // La sucursal activa / disponibles vienen re-validadas por el backend
+        // (si se borró la sucursal o reasignaron al usuario, ya vienen
+        // corregidas).
+        if ('activeTienda' in data) {
+          writeLocalStorage('vexio_active_tienda', data.activeTienda ?? null);
+          setActiveTienda(data.activeTienda ?? null);
+        }
+        if (Array.isArray(data.availableTiendas)) {
+          writeLocalStorage('vexio_available_tiendas', data.availableTiendas);
+          setAvailableTiendas(data.availableTiendas);
         }
       } catch {
         // El refresh token expiró o fue revocado: limpiar sesión
@@ -60,18 +80,43 @@ export const AuthProvider = ({ children }) => {
     tokenStore.clear();
     localStorage.removeItem('vexio_user');
     localStorage.removeItem('vexio_tenant');
+    localStorage.removeItem('vexio_active_tienda');
+    localStorage.removeItem('vexio_available_tiendas');
     setUser(null);
     setTenant(null);
+    setActiveTienda(null);
+    setAvailableTiendas([]);
   };
 
-  // Llamado tras un login o register exitoso
-  const login = ({ accessToken, refreshToken, user, tenant }) => {
+  // Llamado tras un login exitoso
+  const login = ({ accessToken, refreshToken, user, tenant, activeTienda: at, availableTiendas: avt }) => {
     tokenStore.setAccessToken(accessToken);
     tokenStore.setRefreshToken(refreshToken);
-    localStorage.setItem('vexio_user', JSON.stringify(user));
-    localStorage.setItem('vexio_tenant', JSON.stringify(tenant));
+    writeLocalStorage('vexio_user', user);
+    writeLocalStorage('vexio_tenant', tenant);
+    writeLocalStorage('vexio_active_tienda', at ?? null);
+    writeLocalStorage('vexio_available_tiendas', avt ?? []);
     setUser(user);
     setTenant(tenant);
+    setActiveTienda(at ?? null);
+    setAvailableTiendas(avt ?? []);
+  };
+
+  // Elegir / cambiar la sucursal activa de la sesión. Pide un access token
+  // nuevo scopeado a esa sucursal y lo persiste (el backend guarda la elección
+  // en la fila del refresh token, así el próximo refresh ya viene con ella).
+  // Devuelve la sucursal elegida; el caller decide si recargar la app.
+  const selectTienda = async (tiendaId) => {
+    const refreshToken = tokenStore.getRefreshToken();
+    const { data } = await api.post('/auth/select-tienda', { refreshToken, tiendaId });
+    tokenStore.setAccessToken(data.accessToken);
+    writeLocalStorage('vexio_active_tienda', data.activeTienda);
+    setActiveTienda(data.activeTienda);
+    if (Array.isArray(data.availableTiendas)) {
+      writeLocalStorage('vexio_available_tiendas', data.availableTiendas);
+      setAvailableTiendas(data.availableTiendas);
+    }
+    return data.activeTienda;
   };
 
   const logout = async () => {
@@ -86,7 +131,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, tenant, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, tenant, activeTienda, availableTiendas, loading, login, logout, selectTienda }}>
       {children}
     </AuthContext.Provider>
   );

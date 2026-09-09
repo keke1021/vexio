@@ -76,22 +76,16 @@ const StatCard = ({ label, value, sub }) => (
 // Fila expandible bajo una orden — historial de pagos + form para registrar
 // uno nuevo. Mismo patrón de sucursal que Caja/POS/nueva orden: auto-
 // preseleccionada si hay una sola, seleccionable si hay más de una.
-const PaymentPanel = ({ order, tiendas, onSubmit, isPending, error }) => {
-  const [amount, setAmount]     = useState('');
-  const [source, setSource]     = useState('CASH_REGISTER');
-  const [tiendaId, setTiendaId] = useState('');
+const PaymentPanel = ({ order, onSubmit, isPending, error }) => {
+  const [amount, setAmount] = useState('');
+  const [source, setSource] = useState('CASH_REGISTER');
 
-  const effectiveTiendaId = tiendaId || (tiendas.length === 1 ? tiendas[0].id : '');
-  const canSubmit = parseFloat(amount) > 0 && (source === 'EXTERNAL' || !!effectiveTiendaId);
+  const canSubmit = parseFloat(amount) > 0;
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!canSubmit) return;
-    onSubmit({
-      amount: parseFloat(amount),
-      source,
-      tiendaId: source === 'CASH_REGISTER' ? effectiveTiendaId : undefined,
-    }, () => { setAmount(''); });
+    onSubmit({ amount: parseFloat(amount), source }, () => { setAmount(''); });
   };
 
   return (
@@ -155,21 +149,8 @@ const PaymentPanel = ({ order, tiendas, onSubmit, isPending, error }) => {
                     </button>
                   ))}
                 </div>
-                {source === 'CASH_REGISTER' && tiendas.length > 1 && (
-                  <select
-                    value={effectiveTiendaId}
-                    onChange={(e) => setTiendaId(e.target.value)}
-                    className="w-full bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#0F172A]
-                      focus:outline-none focus:border-[#3B82F6] transition-all"
-                  >
-                    <option value="">Seleccioná una sucursal</option>
-                    {tiendas.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                )}
-                {source === 'CASH_REGISTER' && tiendas.length === 0 && (
-                  <p className="text-[12px] text-amber-600">No hay ninguna sucursal creada — no se puede pagar desde caja.</p>
+                {source === 'CASH_REGISTER' && (
+                  <p className="text-[11px] text-[#475569]">Sale de la caja de tu sucursal activa (tiene que estar abierta).</p>
                 )}
                 {error && <p className="text-[12px] text-red-500">{error}</p>}
                 <button
@@ -212,13 +193,6 @@ const SuppliersDetail = () => {
     queryFn: () => api.get(`/suppliers/${id}/orders`).then((r) => r.data),
     staleTime: 30_000,
   });
-
-  const { data: tiendasData } = useQuery({
-    queryKey: ['tiendas'],
-    queryFn: () => api.get('/tiendas').then((r) => r.data),
-    staleTime: 5 * 60_000,
-  });
-  const tiendas = tiendasData?.tiendas ?? [];
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['supplier', id] });
@@ -448,7 +422,6 @@ const SuppliersDetail = () => {
                   {expandedOrderId === o.id && (
                     <PaymentPanel
                       order={o}
-                      tiendas={tiendas}
                       isPending={paymentMutation.isPending}
                       error={paymentError}
                       onSubmit={(data, onDone) =>

@@ -1,6 +1,6 @@
-﻿import { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+﻿import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/axios';
 
 const PAYMENT_OPTIONS = [
@@ -27,7 +27,6 @@ const Input = ({ className = '', ...props }) => (
 const CashMovementNew = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
 
   const [form, setForm] = useState({
     type: 'INCOME',
@@ -39,27 +38,6 @@ const CashMovementNew = () => {
   const [error, setError] = useState('');
 
   const set = (key) => (e) => setForm((p) => ({ ...p, [key]: e.target.value }));
-
-  // tiendaId normalmente ya viene en la URL (el link "+ Nuevo" de CashMain
-  // lo manda) — pero si se entra directo a esta pantalla (bookmark, back
-  // button) lo resolvemos igual acá: auto-preseleccionado si el tenant
-  // tiene una sola sucursal, selector si tiene más de una.
-  const { data: tiendasData } = useQuery({
-    queryKey: ['tiendas'],
-    queryFn: () => api.get('/tiendas').then((r) => r.data),
-    staleTime: 5 * 60_000,
-  });
-  const tiendas = tiendasData?.tiendas ?? [];
-  const tiendaIdParam = searchParams.get('tiendaId') || '';
-  const tiendaId = tiendaIdParam || (tiendas.length === 1 ? tiendas[0].id : '');
-  const tiendaActual = tiendas.find((t) => t.id === tiendaId);
-
-  useEffect(() => {
-    if (!tiendaIdParam && tiendas.length === 1) {
-      setSearchParams({ tiendaId: tiendas[0].id }, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tiendas.length, tiendaIdParam]);
 
   const mutation = useMutation({
     mutationFn: (data) => api.post('/cash/movements', data).then((r) => r.data),
@@ -79,11 +57,7 @@ const CashMovementNew = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
-    mutation.mutate({
-      ...form,
-      amount: parseFloat(form.amount),
-      tiendaId,
-    });
+    mutation.mutate({ ...form, amount: parseFloat(form.amount) });
   };
 
   return (
@@ -96,34 +70,7 @@ const CashMovementNew = () => {
 
       <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A] mb-8">Registrar movimiento</h1>
 
-      {tiendas.length === 0 && (
-        <p className="text-[13px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-6">
-          Todavía no hay ninguna sucursal creada — hace falta al menos una para poder registrar movimientos.
-        </p>
-      )}
-
       <form onSubmit={handleSubmit} className="space-y-6">
-
-        {tiendas.length > 1 && (
-          <div>
-            <Label required>Sucursal</Label>
-            <select
-              value={tiendaId}
-              onChange={(e) => setSearchParams({ tiendaId: e.target.value })}
-              className="w-full bg-white border border-[#E2E8F0] rounded-lg px-4 py-2.5 text-[13px] text-[#64748B]
-                focus:outline-none focus:border-[#3B82F6] transition-all"
-            >
-              <option value="">Seleccioná una sucursal</option>
-              {tiendas.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {tiendas.length === 1 && tiendaActual && (
-          <p className="text-[12px] text-[#475569]">Sucursal: <span className="text-[#64748B] font-medium">{tiendaActual.name}</span></p>
-        )}
 
         <div>
           <Label required>Tipo</Label>
@@ -209,7 +156,7 @@ const CashMovementNew = () => {
         <div className="flex items-center gap-3 pt-2">
           <button
             type="submit"
-            disabled={mutation.isPending || !tiendaId}
+            disabled={mutation.isPending}
             className="bg-[#3B82F6] hover:bg-[#2563EB] text-white text-[13px] font-medium px-6 py-2.5
               rounded-lg transition-colors disabled:opacity-40"
           >

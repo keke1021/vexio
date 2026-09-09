@@ -11,9 +11,6 @@ const ITEM_STATUS_CFG = {
   CANCELLED:  { label: 'Cancelado',      cls: 'text-red-500 bg-red-50' },
 };
 
-// OWNER/ADMIN/SELLER: acceso total a transferencias, cualquier sucursal.
-const UNRESTRICTED_ROLES = ['OWNER', 'ADMIN', 'SELLER', 'SUPERADMIN'];
-
 const fmtDateTime = (d) =>
   d ? new Date(d).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -147,7 +144,7 @@ const CancelItemModal = ({ onConfirm, onClose, isPending }) => {
 
 const TransferDetail = () => {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { activeTienda } = useAuth();
   const queryClient = useQueryClient();
   const [cancelTarget, setCancelTarget] = useState(null);
   const [actionError, setActionError] = useState('');
@@ -197,12 +194,12 @@ const TransferDetail = () => {
     );
   }
 
-  // Solo para mostrar/ocultar acciones — el enforcement real es siempre
-  // server-side (assertTiendaAccess), esto es puramente para no ofrecer un
-  // botón que el backend va a rechazar con 403.
-  const unrestricted = UNRESTRICTED_ROLES.includes(user?.role);
-  const isOrigin = unrestricted || user?.tiendaId === transfer.fromTienda.id;
-  const isDest   = unrestricted || user?.tiendaId === transfer.toTienda.id;
+  // Solo para mostrar/ocultar acciones — el enforcement real es server-side
+  // (assertTiendaAccess contra la sucursal activa del JWT). Un lote se opera
+  // desde su origen (sacar/despachar) o su destino (recibir); para actuar
+  // sobre otra sucursal, OWNER/ADMIN la cambian desde el header.
+  const isOrigin = activeTienda?.id === transfer.fromTienda.id;
+  const isDest   = activeTienda?.id === transfer.toTienda.id;
 
   return (
     <div className="px-6 pt-8 pb-16 max-w-2xl mx-auto">
@@ -265,9 +262,10 @@ const TransferDetail = () => {
       <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
         {transfer.transferItems.map((ti) => {
           const cfg = ITEM_STATUS_CFG[ti.status] ?? { label: ti.status, cls: 'text-[#475569] bg-[#F1F5F9]' };
-          // Cancelar un ítem de una transferencia ya creada es OWNER/ADMIN
-          // (el backend lo gatea con authorize, no con assertTiendaAccess).
-          const canCancel = unrestricted && ['PREPARING', 'DISPATCHED'].includes(ti.status);
+          // Cancelar un ítem: el backend lo permite desde origen O destino
+          // (assertTiendaAccess) — cualquiera de las dos puntas puede detectar
+          // el problema.
+          const canCancel = (isOrigin || isDest) && ['PREPARING', 'DISPATCHED'].includes(ti.status);
           const canReceive = isDest && ti.status === 'DISPATCHED';
 
           return (

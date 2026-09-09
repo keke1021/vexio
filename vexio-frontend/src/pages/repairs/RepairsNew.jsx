@@ -2,6 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/axios';
+import { useAuth } from '../../context/AuthContext';
 
 const FAULT_OPTIONS = [
   { value: 'SCREEN',   label: 'Pantalla' },
@@ -42,12 +43,17 @@ const Select = ({ children, ...props }) => (
 const RepairsNew = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user, activeTienda } = useAuth();
+  const isTech = user?.role === 'TECH';
 
   const [form, setForm] = useState({
     customerName: '', customerPhone: '',
     deviceModel: '', deviceColor: '', deviceImei: '',
     faultType: 'SCREEN', faultDescription: '',
     technicianId: '', budget: '', estimatedDate: '', internalNotes: '',
+    // TECH elige de qué sucursal viene el equipo; el resto de los roles la
+    // heredan de su sucursal activa (el backend la fuerza).
+    tiendaId: activeTienda?.id ?? '',
   });
   const [error, setError] = useState('');
 
@@ -58,6 +64,15 @@ const RepairsNew = () => {
     queryFn: () => api.get('/repairs/technicians').then((r) => r.data),
     staleTime: 5 * 60_000,
   });
+
+  // Lista de sucursales — solo para el selector del TECH.
+  const { data: tiendasData } = useQuery({
+    queryKey: ['tiendas'],
+    queryFn: () => api.get('/tiendas').then((r) => r.data),
+    staleTime: 5 * 60_000,
+    enabled: isTech,
+  });
+  const tiendas = tiendasData?.tiendas ?? [];
 
   const mutation = useMutation({
     mutationFn: (data) => api.post('/repairs', data).then((r) => r.data),
@@ -77,6 +92,9 @@ const RepairsNew = () => {
       budget: form.budget ? parseFloat(form.budget) : undefined,
       estimatedDate: form.estimatedDate || undefined,
       technicianId: form.technicianId || undefined,
+      // Solo el TECH manda tiendaId (elige el origen). Para el resto lo ignora
+      // el backend y usa la sucursal activa.
+      tiendaId: isTech ? (form.tiendaId || undefined) : undefined,
     });
   };
 
@@ -88,9 +106,25 @@ const RepairsNew = () => {
         <span className="text-[13px] text-[#64748B]">Nueva orden</span>
       </div>
 
-      <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A] mb-8">Nueva orden de reparación</h1>
+      <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Nueva orden de reparación</h1>
+      {!isTech && activeTienda && (
+        <p className="text-[13px] text-[#475569] mt-0.5 mb-8">Sucursal de origen: {activeTienda.name}</p>
+      )}
+      {(isTech || !activeTienda) && <div className="mb-8" />}
 
       <form onSubmit={handleSubmit} className="space-y-8">
+
+        {isTech && (
+          <section>
+            <p className="text-[11px] text-[#3B82F6] uppercase tracking-widest font-medium mb-4">Sucursal de origen</p>
+            <Select value={form.tiendaId} onChange={set('tiendaId')} required>
+              <option value="">¿De qué sucursal viene el equipo?</option>
+              {tiendas.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </Select>
+          </section>
+        )}
 
         <section>
           <p className="text-[11px] text-[#3B82F6] uppercase tracking-widest font-medium mb-4">Cliente</p>

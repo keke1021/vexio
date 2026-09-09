@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import api from '../../api/axios';
@@ -299,7 +299,7 @@ const ClosePanel = ({ byCurrency, onClose, isPending, onCancel }) => {
 };
 
 const CashMain = () => {
-  const { user } = useAuth();
+  const { user, activeTienda } = useAuth();
   const queryClient = useQueryClient();
   const canManage = ['OWNER', 'ADMIN', 'SELLER'].includes(user?.role);
 
@@ -307,37 +307,17 @@ const CashMain = () => {
   const [error, setError] = useState('');
   const [selectedSaleId, setSelectedSaleId] = useState(null);
 
-  // Cada sucursal tiene su propia caja — tiendaId viaja en la URL para que
-  // sea compartible con /cash/movements/new (mismo criterio: auto-preseleccionar
-  // si el tenant tiene una sola tienda, mostrar selector si tiene más de una).
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { data: tiendasData } = useQuery({
-    queryKey: ['tiendas'],
-    queryFn: () => api.get('/tiendas').then((r) => r.data),
-    staleTime: 5 * 60_000,
-  });
-  const tiendas = tiendasData?.tiendas ?? [];
-  const tiendaIdParam = searchParams.get('tiendaId') || '';
-  const tiendaId = tiendaIdParam || (tiendas.length === 1 ? tiendas[0].id : '');
-
-  useEffect(() => {
-    if (!tiendaIdParam && tiendas.length === 1) {
-      setSearchParams({ tiendaId: tiendas[0].id }, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tiendas.length, tiendaIdParam]);
-
+  // La caja es siempre la de la sucursal activa de la sesión (el backend la
+  // toma del JWT). Cambiar de sucursal se hace desde el header.
   const { data: summary, isLoading: loadingSummary } = useQuery({
-    queryKey: ['cash-summary', tiendaId],
-    queryFn: () => api.get('/cash/summary', { params: { tiendaId } }).then((r) => r.data),
-    enabled: !!tiendaId,
+    queryKey: ['cash-summary'],
+    queryFn: () => api.get('/cash/summary').then((r) => r.data),
     staleTime: 30_000,
   });
 
   const { data: movData, isLoading: loadingMov } = useQuery({
-    queryKey: ['cash-movements', tiendaId],
-    queryFn: () => api.get('/cash/movements', { params: { tiendaId } }).then((r) => r.data),
-    enabled: !!tiendaId,
+    queryKey: ['cash-movements'],
+    queryFn: () => api.get('/cash/movements').then((r) => r.data),
     staleTime: 30_000,
   });
 
@@ -352,13 +332,13 @@ const CashMain = () => {
   };
 
   const openMutation = useMutation({
-    mutationFn: (data) => api.post('/cash/open', { ...data, tiendaId }).then((r) => r.data),
+    mutationFn: (data) => api.post('/cash/open', data).then((r) => r.data),
     onSuccess: () => { setError(''); invalidate(); },
     onError: (err) => setError(err.response?.data?.message || 'Error al abrir la caja.'),
   });
 
   const closeMutation = useMutation({
-    mutationFn: (data) => api.post('/cash/close', { ...data, tiendaId }).then((r) => r.data),
+    mutationFn: (data) => api.post('/cash/close', data).then((r) => r.data),
     onSuccess: () => { setError(''); setShowClose(false); invalidate(); },
     onError: (err) => setError(err.response?.data?.message || 'Error al cerrar la caja.'),
   });
@@ -377,21 +357,8 @@ const CashMain = () => {
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Caja</h1>
-          {tiendas.length > 1 && (
-            <div className="mt-1.5">
-              <label className="text-[10px] text-[#475569] uppercase tracking-[0.12em] mr-2">Sucursal</label>
-              <select
-                value={tiendaId}
-                onChange={(e) => setSearchParams({ tiendaId: e.target.value })}
-                className="bg-white border border-[#E2E8F0] rounded-lg px-2 py-1 text-[13px] text-[#0F172A]
-                  focus:outline-none focus:border-[#3B82F6] transition-all"
-              >
-                <option value="">Seleccioná una sucursal</option>
-                {tiendas.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
+          {activeTienda && (
+            <p className="text-[13px] text-[#475569] mt-0.5">Sucursal: {activeTienda.name}</p>
           )}
           {session && !isOpen && (
             <p className="text-[13px] text-[#475569] mt-0.5">
@@ -423,19 +390,7 @@ const CashMain = () => {
         </div>
       </div>
 
-      {tiendas.length === 0 && (
-        <p className="text-[13px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-          Todavía no hay ninguna sucursal creada — hace falta al menos una para poder operar la caja.
-        </p>
-      )}
-
-      {tiendas.length > 1 && !tiendaId && (
-        <p className="text-[13px] text-[#475569]">Elegí una sucursal arriba para ver su caja.</p>
-      )}
-
-      {tiendaId && (
-        <>
-          {loadingSummary && <p className="text-[#64748B] text-[13px]">Cargando...</p>}
+      {loadingSummary && <p className="text-[#64748B] text-[13px]">Cargando...</p>}
 
           {error && <p className="text-[13px] text-red-500 mb-5">{error}</p>}
 
@@ -521,7 +476,7 @@ const CashMain = () => {
               <p className="text-[11px] text-[#3B82F6] uppercase tracking-widest font-medium">Movimientos</p>
               {canManage && isOpen && (
                 <Link
-                  to={`/cash/movements/new?tiendaId=${tiendaId}`}
+                  to="/cash/movements/new"
                   className="text-[12px] text-[#475569] hover:text-[#64748B] transition-colors"
                 >
                   + Nuevo
@@ -605,10 +560,8 @@ const CashMain = () => {
 
       <div className="mt-10">
         <p className="text-[11px] text-[#3B82F6] uppercase tracking-widest font-medium mb-3">Historial de cajas</p>
-        <CashSessionsTable tiendaId={tiendaId} showTiendaColumn={false} />
+        <CashSessionsTable />
       </div>
-        </>
-      )}
       {selectedSaleId && (
         <SaleDetailModal saleId={selectedSaleId} onClose={() => setSelectedSaleId(null)} />
       )}

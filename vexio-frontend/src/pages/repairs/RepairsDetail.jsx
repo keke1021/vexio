@@ -241,6 +241,7 @@ const RepairsDetail = () => {
         <Row label="Teléfono">{repair.customerPhone}</Row>
         <Row label="Equipo">{repair.deviceModel}</Row>
         {repair.deviceImei && <Row label="IMEI"><span className="font-mono">{repair.deviceImei}</span></Row>}
+        {repair.tienda?.name && <Row label="Sucursal de origen">{repair.tienda.name}</Row>}
         <Row label="Tipo de falla">{FAULT_LABELS[repair.faultType]}</Row>
         <Row label="Descripción">{repair.faultDescription}</Row>
         <Row label="Técnico">{repair.technician?.name}</Row>

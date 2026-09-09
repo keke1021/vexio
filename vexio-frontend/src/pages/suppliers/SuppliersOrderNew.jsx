@@ -40,21 +40,12 @@ const SuppliersOrderNew = () => {
   const [hasDownPayment, setHasDownPayment]     = useState(false);
   const [downAmount, setDownAmount]             = useState('');
   const [downSource, setDownSource]             = useState('CASH_REGISTER');
-  const [downTiendaId, setDownTiendaId]         = useState('');
 
   const { data: supplier } = useQuery({
     queryKey: ['supplier', supplierId],
     queryFn: () => api.get(`/suppliers/${supplierId}`).then((r) => r.data),
     staleTime: 5 * 60_000,
   });
-
-  const { data: tiendasData } = useQuery({
-    queryKey: ['tiendas'],
-    queryFn: () => api.get('/tiendas').then((r) => r.data),
-    staleTime: 5 * 60_000,
-  });
-  const tiendas = tiendasData?.tiendas ?? [];
-  const effectiveTiendaId = downTiendaId || (tiendas.length === 1 ? tiendas[0].id : '');
 
   const setItem = (idx, key) => (e) =>
     setItems((prev) => prev.map((item, i) => i === idx ? { ...item, [key]: e.target.value } : item));
@@ -96,11 +87,7 @@ const SuppliersOrderNew = () => {
         unitPrice: parseFloat(i.unitPrice),
       })),
       downPayment: hasDownPayment && downAmountNum > 0
-        ? {
-            amount: downAmountNum,
-            source: downSource,
-            tiendaId: downSource === 'CASH_REGISTER' ? effectiveTiendaId : undefined,
-          }
+        ? { amount: downAmountNum, source: downSource }
         : undefined,
     });
   };
@@ -257,28 +244,9 @@ const SuppliersOrderNew = () => {
               </div>
 
               {downSource === 'CASH_REGISTER' && (
-                <div>
-                  {tiendas.length > 1 ? (
-                    <>
-                      <label className="block text-[12px] font-medium text-[#64748B] mb-1.5">Sucursal</label>
-                      <select
-                        value={effectiveTiendaId}
-                        onChange={(e) => setDownTiendaId(e.target.value)}
-                        className="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#0F172A]
-                          focus:outline-none focus:border-[#3B82F6] transition-all"
-                      >
-                        <option value="">Seleccioná una sucursal</option>
-                        {tiendas.map((t) => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                      </select>
-                    </>
-                  ) : tiendas.length === 0 ? (
-                    <p className="text-[12px] text-amber-600">
-                      No hay ninguna sucursal creada — no se puede pagar desde caja.
-                    </p>
-                  ) : null}
-                </div>
+                <p className="text-[12px] text-[#475569]">
+                  La seña sale de la caja de tu sucursal activa (tiene que estar abierta).
+                </p>
               )}
 
               {downAmountNum > 0 && (
@@ -309,10 +277,7 @@ const SuppliersOrderNew = () => {
         <div className="flex items-center gap-3 pt-1">
           <button
             type="submit"
-            disabled={
-              mutation.isPending ||
-              (hasDownPayment && downAmountNum > 0 && downSource === 'CASH_REGISTER' && !effectiveTiendaId)
-            }
+            disabled={mutation.isPending}
             className="bg-[#3B82F6] hover:bg-[#2563EB] text-white text-[13px] font-medium px-6 py-2.5
               rounded-lg transition-colors disabled:opacity-40"
           >

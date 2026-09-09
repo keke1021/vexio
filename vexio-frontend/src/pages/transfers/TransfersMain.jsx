@@ -1,13 +1,9 @@
 import { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import NewTransferModal from './NewTransferModal';
-
-// OWNER/ADMIN/SELLER: acceso total (todas las sucursales, listado completo).
-// TECH no entra a este módulo. `branchLocked` quedó, en la práctica, inerte.
-const UNRESTRICTED_ROLES = ['OWNER', 'ADMIN', 'SELLER', 'SUPERADMIN'];
 
 const STATUS_BADGE = {
   OPEN:       { label: 'Abierto',   cls: 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]' },
@@ -62,39 +58,32 @@ const Section = ({ title, titleCls, transfers, tiendaId, hint }) => (
   </div>
 );
 
-// Hub del módulo: agrupa las transferencias que tocan la sucursal
-// seleccionada en tres baldes (por recibir, en armado, enviadas
-// esperando confirmación) + historial de las ya cerradas. Sumar ítems a un
-// lote se hace desde la ficha del equipo en Inventario (SendToTiendaPanel),
-// no desde acá — evita duplicar el buscador de equipos en dos pantallas.
+// Hub del módulo: agrupa las transferencias que tocan la SUCURSAL ACTIVA en
+// tres baldes (por recibir, en armado, enviadas esperando confirmación) +
+// historial de las cerradas. Todo está scopeado a la sucursal activa del JWT
+// (server-side) — para operar otra sucursal, un OWNER/ADMIN la cambia desde el
+// header. Sumar ítems a un lote también se hace desde la ficha del equipo en
+// Inventario (SendToTiendaPanel).
 const TransfersMain = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { activeTienda } = useAuth();
   const [showNewTransfer, setShowNewTransfer] = useState(false);
-  const [searchParams, setSearchParams] = useSearchParams();
 
+  const tiendaId = activeTienda?.id;
+
+  // Todas las sucursales del tenant — para el destino de una transferencia
+  // nueva y para el aviso de "hace falta ≥2 sucursales".
   const { data: tiendasData } = useQuery({
     queryKey: ['tiendas'],
     queryFn: () => api.get('/tiendas').then((r) => r.data),
     staleTime: 5 * 60_000,
   });
-
-  // SELLER/TECH solo operan su sucursal asignada (el backend los limita con
-  // assertTiendaAccess). Reducimos el selector a esa sucursal así no eligen
-  // una ajena y se comen un 403 / una pantalla vacía engañosa.
-  const branchLocked = user && !UNRESTRICTED_ROLES.includes(user.role);
   const allTiendas = tiendasData?.tiendas ?? [];
-  const tiendas = branchLocked ? allTiendas.filter((t) => t.id === user.tiendaId) : allTiendas;
-
-  const tiendaIdParam = searchParams.get('tiendaId') || '';
-  const tiendaId = branchLocked
-    ? (tiendas[0]?.id || '')
-    : (tiendaIdParam || (tiendas.length === 1 ? tiendas[0].id : ''));
 
   const { data, isLoading } = useQuery({
-    queryKey: ['stock-transfers', tiendaId],
-    queryFn: () => api.get('/stock-transfers', { params: { tiendaId, pageSize: 100 } }).then((r) => r.data),
+    queryKey: ['stock-transfers'],
+    queryFn: () => api.get('/stock-transfers', { params: { pageSize: 100 } }).then((r) => r.data),
     enabled: !!tiendaId,
     staleTime: 15_000,
   });
@@ -111,24 +100,11 @@ const TransfersMain = () => {
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-[#0F172A]">Transferencias</h1>
-          {tiendas.length > 1 && (
-            <div className="mt-1.5">
-              <label className="text-[10px] text-[#475569] uppercase tracking-[0.12em] mr-2">Sucursal</label>
-              <select
-                value={tiendaId}
-                onChange={(e) => setSearchParams({ tiendaId: e.target.value })}
-                className="bg-white border border-[#E2E8F0] rounded-lg px-2 py-1 text-[13px] text-[#0F172A]
-                  focus:outline-none focus:border-[#3B82F6] transition-all"
-              >
-                <option value="">Seleccioná una sucursal</option>
-                {tiendas.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
+          {activeTienda && (
+            <p className="text-[13px] text-[#475569] mt-0.5">Sucursal: {activeTienda.name}</p>
           )}
         </div>
-        {tiendaId && (
+        {tiendaId && allTiendas.length >= 2 && (
           <button
             onClick={() => setShowNewTransfer(true)}
             className="bg-[#3B82F6] hover:bg-[#2563EB] text-white text-[13px] font-medium px-4 py-2 rounded-lg transition-colors"
@@ -142,16 +118,6 @@ const TransfersMain = () => {
         <p className="text-[13px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
           Hace falta al menos dos sucursales para transferir stock entre ellas.
         </p>
-      )}
-
-      {branchLocked && allTiendas.length >= 2 && !tiendaId && (
-        <p className="text-[13px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-          Tu usuario no tiene una sucursal asignada — pedile a un encargado que te asigne una para operar transferencias.
-        </p>
-      )}
-
-      {tiendas.length > 1 && !tiendaId && (
-        <p className="text-[13px] text-[#475569]">Elegí una sucursal arriba para ver sus transferencias.</p>
       )}
 
       {tiendaId && isLoading && <p className="text-[#64748B] text-[13px]">Cargando...</p>}
@@ -193,7 +159,7 @@ const TransfersMain = () => {
       {showNewTransfer && (
         <NewTransferModal
           fromTiendaId={tiendaId}
-          tiendas={tiendas}
+          tiendas={allTiendas}
           onClose={(transferId) => {
             setShowNewTransfer(false);
             queryClient.invalidateQueries({ queryKey: ['stock-transfers'] });

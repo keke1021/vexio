@@ -131,6 +131,56 @@ const NotificationBell = () => {
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
+// Selector / indicador de sucursal activa en el header.
+//   - OWNER/ADMIN con >1 sucursal: <select> para cambiar. Al cambiar se pide un
+//     JWT nuevo scopeado a esa sucursal y se recarga toda la app (así React
+//     Query, formularios y todo arrancan limpios con los datos de la nueva).
+//   - resto (SELLER/TECH, o 1 sola sucursal): chip de solo lectura.
+const BranchSwitcher = () => {
+  const { activeTienda, availableTiendas, selectTienda } = useAuth();
+  const [switching, setSwitching] = useState(false);
+
+  if (!activeTienda) return null;
+
+  const canSwitch = (availableTiendas?.length ?? 0) > 1;
+
+  if (!canSwitch) {
+    return (
+      <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/10 text-white/90 text-[11px] font-medium">
+        <span className="w-1.5 h-1.5 rounded-full bg-white/50" />
+        {activeTienda.name}
+      </span>
+    );
+  }
+
+  const onChange = async (e) => {
+    const id = e.target.value;
+    if (id === activeTienda.id) return;
+    setSwitching(true);
+    try {
+      await selectTienda(id);
+      window.location.reload();
+    } catch {
+      setSwitching(false);
+    }
+  };
+
+  return (
+    <select
+      value={activeTienda.id}
+      onChange={onChange}
+      disabled={switching}
+      title="Sucursal activa"
+      className="bg-white/10 text-white text-[11px] font-medium rounded-md px-2 py-1 border border-white/15
+        focus:outline-none focus:border-white/40 transition-colors disabled:opacity-50 max-w-[140px]"
+    >
+      {availableTiendas.map((t) => (
+        <option key={t.id} value={t.id} className="text-[#0F172A]">{t.name}</option>
+      ))}
+    </select>
+  );
+};
+
 const Layout = () => {
   const { user, tenant, logout } = useAuth();
   const { dark, toggle } = useTheme();
@@ -213,6 +263,7 @@ const Layout = () => {
           >
             {dark ? <SunIcon /> : <MoonIcon />}
           </button>
+          <BranchSwitcher />
           <NotificationBell />
           <div className="text-right hidden sm:block">
             <p className="text-[12px] text-white leading-none">{tenant?.name}</p>

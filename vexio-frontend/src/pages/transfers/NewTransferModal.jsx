@@ -3,13 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import api from '../../api/axios';
 
-// Buscador de equipos disponibles — mismo endpoint y mismo patrón de
-// debounce que PosMain.jsx (GET /pos/search-item), sumándole tiendaId para
-// acotar a lo que realmente está en la sucursal de origen (no tiene sentido
-// ofrecer para transferir un equipo que ya está en otra sucursal). No se
-// reimplementa ninguna lógica de disponibilidad — es la misma query que ya
-// usa el POS, con un filtro más.
-const useAvailableItemsSearch = (fromTiendaId, enabled) => {
+// Buscador de equipos disponibles — mismo endpoint y patrón de debounce que
+// PosMain.jsx (GET /pos/search-item). El backend ya acota a la sucursal activa
+// del JWT, que es siempre el origen de la transferencia.
+const useAvailableItemsSearch = (enabled) => {
   const [search, setSearch] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
 
@@ -19,8 +16,8 @@ const useAvailableItemsSearch = (fromTiendaId, enabled) => {
   }, [search]);
 
   const { data, isFetching } = useQuery({
-    queryKey: ['pos-search', debouncedQ, fromTiendaId],
-    queryFn: () => api.get('/pos/search-item', { params: { q: debouncedQ, tiendaId: fromTiendaId } }).then((r) => r.data),
+    queryKey: ['pos-search', debouncedQ],
+    queryFn: () => api.get('/pos/search-item', { params: { q: debouncedQ } }).then((r) => r.data),
     enabled: enabled && debouncedQ.trim().length >= 2,
     staleTime: 10_000,
   });
@@ -42,7 +39,7 @@ const NewTransferModal = ({ fromTiendaId, tiendas, onClose }) => {
   const [error, setError] = useState('');
 
   const destinoOptions = tiendas.filter((t) => t.id !== fromTiendaId);
-  const { search, setSearch, debouncedQ, results, isFetching } = useAvailableItemsSearch(fromTiendaId, !!toTiendaId);
+  const { search, setSearch, debouncedQ, results, isFetching } = useAvailableItemsSearch(!!toTiendaId);
 
   useEffect(() => {
     if (toTiendaId) searchRef.current?.focus();
@@ -53,7 +50,7 @@ const NewTransferModal = ({ fromTiendaId, tiendas, onClose }) => {
   // arranca a ciegas asumiendo que el lote está vacío.
   const { data: openLotData } = useQuery({
     queryKey: ['stock-transfer-open', fromTiendaId, toTiendaId],
-    queryFn: () => api.get('/stock-transfers/open', { params: { fromTiendaId, toTiendaId } }).then((r) => r.data),
+    queryFn: () => api.get('/stock-transfers/open', { params: { toTiendaId } }).then((r) => r.data),
     enabled: !!toTiendaId,
     staleTime: 0,
   });

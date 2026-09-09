@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, AlertTriangle, ChevronUp, ChevronDown, Receipt, Clock, User } from 'lucide-react';
 import api from '../../api/axios';
@@ -354,27 +354,8 @@ const PosMain = () => {
   const [saleError, setSaleError]         = useState('');
   const customerNameRef = useRef(null);
 
-  // Toda venta pertenece a una sucursal (igual que Caja) — tiendaId viaja en
-  // la URL para poder compartirse/refrescarse, auto-preseleccionada si el
-  // tenant tiene una sola tienda, seleccionable si tiene más de una. Mismo
-  // patrón que CashMain.jsx.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { data: tiendasData } = useQuery({
-    queryKey: ['tiendas'],
-    queryFn: () => api.get('/tiendas').then((r) => r.data),
-    staleTime: 5 * 60_000,
-  });
-  const tiendas = tiendasData?.tiendas ?? [];
-  const tiendaIdParam = searchParams.get('tiendaId') || '';
-  const tiendaId = tiendaIdParam || (tiendas.length === 1 ? tiendas[0].id : '');
-
-  useEffect(() => {
-    if (!tiendaIdParam && tiendas.length === 1) {
-      setSearchParams({ tiendaId: tiendas[0].id }, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tiendas.length, tiendaIdParam]);
-
+  // Toda venta es de la sucursal activa de la sesión (el backend la toma del
+  // JWT). Cambiar de sucursal se hace desde el header.
   useEffect(() => { searchRef.current?.focus(); }, []);
 
   useEffect(() => {
@@ -467,7 +448,7 @@ const PosMain = () => {
   };
 
   const total      = cart.reduce((sum, c) => sum + getDisplayPrice(c), 0);
-  const canConfirm = cart.length > 0 && paymentMethod && !!tiendaId;
+  const canConfirm = cart.length > 0 && paymentMethod;
   const noRateWarn = saleCurrency !== 'ARS' && !activeRate;
 
   // Un cliente cuenta como "asociado" solo con nombre completo + al menos
@@ -500,7 +481,6 @@ const PosMain = () => {
       customerName:  customerName  || undefined,
       customerPhone: customerPhone || undefined,
       customerEmail: customerEmail || undefined,
-      tiendaId,
     });
   };
 
@@ -553,30 +533,6 @@ const PosMain = () => {
       <div className="flex-1 self-stretch flex flex-col border-r border-[#E2E8F0] overflow-hidden bg-white">
 
         <div className="p-5 border-b border-[#E2E8F0] bg-white">
-          {tiendas.length > 1 && (
-            <div className="mb-3">
-              <label className="text-[10px] text-[#475569] uppercase tracking-[0.12em] mr-2">Sucursal</label>
-              <select
-                value={tiendaId}
-                onChange={(e) => setSearchParams({ tiendaId: e.target.value })}
-                className="bg-white border border-[#E2E8F0] rounded-lg px-2 py-1 text-[13px] text-[#0F172A]
-                  focus:outline-none focus:border-[#3B82F6] transition-all"
-              >
-                <option value="">Seleccioná una sucursal</option>
-                {tiendas.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          {tiendas.length === 0 && (
-            <p className="mb-3 text-[12px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              Todavía no hay ninguna sucursal creada — hace falta al menos una para poder vender.
-            </p>
-          )}
-          {tiendas.length > 1 && !tiendaId && (
-            <p className="mb-3 text-[12px] text-[#475569]">Elegí una sucursal arriba para poder vender.</p>
-          )}
           <div className="relative">
             <input
               ref={searchRef}
