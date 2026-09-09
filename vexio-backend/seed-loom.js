@@ -66,24 +66,43 @@ const uuid = () => crypto.randomUUID();
 
 // ─── Fechas ───────────────────────────────────────────────────────────────
 
-const TODAY = new Date();
-const atTime = (date, h, m) => { const d = new Date(date); d.setHours(h, m, 0, 0); return d; };
-const addDays = (date, n) => { const d = new Date(date); d.setDate(d.getDate() + n); return d; };
-const addHours = (date, n) => { const d = new Date(date); d.setHours(d.getHours() + n); return d; };
-const clampToday = (d) => (d && d > TODAY ? TODAY : d);
+// TODO en hora Argentina (UTC-3, sin horario de verano). El contenedor de
+// Railway corre en UTC, así que construimos los instantes con Date.UTC(h+3)
+// para que la hora de pared que se ve en la app sea la argentina, corra donde
+// corra el script.
+const AR = 3;
+const arInstant = (y, mo, d, h = 0, mi = 0) => new Date(Date.UTC(y, mo, d, h + AR, mi, 0, 0));
+const arYMD = (date) => {
+  const s = new Date(date.getTime() - AR * 3600e3);
+  return [s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate(), s.getUTCDay()];
+};
 
-const WINDOW_START = atTime(addDays(TODAY, -14), 9, 0);
+const NOW = new Date();
+const [_ty, _tm, _td] = arYMD(NOW);
+const TODAY = arInstant(_ty, _tm, _td, 0, 0); // medianoche AR de hoy
 
-// Días activos: se saltea domingo, y ~12% de los demás (algún día suelto cerrado).
+const addDays  = (date, n) => new Date(date.getTime() + n * 86400e3);
+const addHours = (date, n) => new Date(date.getTime() + n * 3600e3);
+// atTime(díaAR, h, m): reloj a h:m hora Argentina de ese día calendario.
+const atTime = (arDay, h, m) => { const [y, mo, d] = arYMD(arDay); return arInstant(y, mo, d, h, m); };
+const clampNow = (d) => (d && d.getTime() > NOW.getTime() ? NOW : d);
+const NOW_AR_H = new Date(NOW.getTime() - AR * 3600e3).getUTCHours();
+// hora aleatoria [lo,hi]; si `day` es HOY, no pasa de la hora actual (AR).
+const dayHour = (day, lo, hi) => randInt(lo, day.getTime() === TODAY.getTime() ? Math.max(lo, Math.min(hi, NOW_AR_H)) : hi);
+
+const WINDOW_START = addDays(TODAY, -13); // 14 días contando hoy
+
+// Días activos: se saltea domingo (hora AR), y ~12% de los demás.
 const ACTIVE_DAYS = [];
-for (let d = new Date(WINDOW_START); d <= TODAY; d = addDays(d, 1)) {
-  if (d.getDay() === 0) continue;
+for (let ms = WINDOW_START.getTime(); ms <= TODAY.getTime(); ms += 86400e3) {
+  const day = new Date(ms);
+  if (arYMD(day)[3] === 0) continue; // domingo
   if (!chance(0.88)) continue;
-  ACTIVE_DAYS.push(atTime(d, 0, 0));
+  ACTIVE_DAYS.push(day);
 }
-// Garantía: el último día activo es HOY (para dejar cajas abiertas / pool fresco).
-if (ACTIVE_DAYS[ACTIVE_DAYS.length - 1].toDateString() !== TODAY.toDateString()) {
-  ACTIVE_DAYS.push(atTime(TODAY, 0, 0));
+// Garantía: HOY siempre es día activo (cajas abiertas / pool fresco).
+if (!ACTIVE_DAYS.length || ACTIVE_DAYS[ACTIVE_DAYS.length - 1].getTime() !== TODAY.getTime()) {
+  ACTIVE_DAYS.push(TODAY);
 }
 const LAST_DAY = ACTIVE_DAYS[ACTIVE_DAYS.length - 1];
 
@@ -369,10 +388,10 @@ async function main() {
     // ── Cajas: una sesión por (día activo × sucursal) ──────────────────
     const sessions = []; // { id, tiendaId, day, openedAt, closedAt|null }
     for (const day of ACTIVE_DAYS) {
-      const isToday = day.toDateString() === TODAY.toDateString();
+      const isToday = day.getTime() === TODAY.getTime();
       for (const tiendaId of [T.CENTRO.id, T.PALERMO.id]) {
         const id = uuid();
-        const openedAt = atTime(day, randInt(9, 10), randInt(0, 59));
+        const openedAt = clampNow(atTime(day, dayHour(day, 9, 10), randInt(0, 59)));
         const closedAt = isToday ? null : atTime(day, randInt(19, 20), randInt(0, 59));
         sessions.push({ id, tiendaId, day, openedAt, closedAt });
       }
@@ -383,7 +402,7 @@ async function main() {
         closedById: s.closedAt ? sellerOf[s.tiendaId] : null, openedAt: s.openedAt, closedAt: s.closedAt,
       })),
     });
-    const sessionFor = (tiendaId, day) => sessions.find((s) => s.tiendaId === tiendaId && s.day.toDateString() === day.toDateString());
+    const sessionFor = (tiendaId, day) => sessions.find((s) => s.tiendaId === tiendaId && s.day.getTime() === day.getTime());
 
     const ledgerRows = [];
     const cashMovementRows = [];
@@ -417,7 +436,7 @@ async function main() {
         for (let k = 0; k < n; k++) {
           const it = q.shift();
           const saleId = uuid();
-          const saleTime = atTime(day, randInt(10, 19), randInt(5, 55));
+          const saleTime = atTime(day, dayHour(day, 10, 19), randInt(5, 55));
           const paymentMethod = pickWeighted([['CASH', 38], ['TRANSFER', 30], ['CARD', 20], ['INSTALLMENTS', 12]]);
           const sellerId = chance(0.8) ? sellerOf[tiendaId] : U.OWNER.id;
           const session = sessionFor(tiendaId, day);
@@ -454,7 +473,7 @@ async function main() {
     for (const tiendaId of [T.CENTRO.id, T.PALERMO.id]) {
       for (const it of sellQueue[tiendaId]) {
         const saleId = uuid();
-        const saleTime = atTime(LAST_DAY, randInt(11, 18), randInt(0, 59));
+        const saleTime = atTime(LAST_DAY, dayHour(LAST_DAY, 11, 18), randInt(0, 59));
         const session = sessionFor(tiendaId, LAST_DAY);
         const paymentMethod = pickWeighted([['CASH', 40], ['TRANSFER', 35], ['CARD', 25]]);
         const sellerId = sellerOf[tiendaId];
@@ -495,7 +514,7 @@ async function main() {
         const amount = parseFloat(randFloat(range[0], range[1]).toFixed(2));
         const description = isExpense ? pick(EXPENSE_DESCRIPTIONS) : pick(INCOME_DESCRIPTIONS);
         const paymentMethod = pickWeighted([['CASH', 70], ['TRANSFER', 30]]);
-        const movTime = atTime(s.day, randInt(10, 18), randInt(0, 59));
+        const movTime = atTime(s.day, dayHour(s.day, 10, 18), randInt(0, 59));
         const cmId = uuid();
         cashMovementRows.push({
           id: cmId, type: isExpense ? 'EXPENSE' : 'INCOME', amount, currencyCode, description,
@@ -571,7 +590,7 @@ async function main() {
           // un pago (seña) externo
           const señaAmount = parseFloat((total * randFloat(0.4, 0.6)).toFixed(2));
           const paidAt = atTime(addDays(orderDay, randInt(1, 4)), randInt(11, 17), randInt(0, 59));
-          if (paidAt <= TODAY) {
+          if (paidAt.getTime() <= NOW.getTime()) {
             const payId = uuid();
             supplierPaymentRows.push({
               id: payId, amount: señaAmount, currencyCode: sd.currency, source: 'EXTERNAL',
@@ -603,8 +622,8 @@ async function main() {
       const faultType = pick(Object.keys(FAULT_DESCRIPTIONS));
       const id = uuid();
       let readyAt = null, deliveredAt = null;
-      if (['READY', 'DELIVERED'].includes(status)) readyAt = clampToday(addDays(createdAt, randInt(2, 5)));
-      if (status === 'DELIVERED') deliveredAt = clampToday(addDays(readyAt ?? createdAt, randInt(0, 2)));
+      if (['READY', 'DELIVERED'].includes(status)) readyAt = clampNow(addDays(createdAt, randInt(2, 5)));
+      if (status === 'DELIVERED') deliveredAt = clampNow(addDays(readyAt ?? createdAt, randInt(0, 2)));
 
       repairRows.push({
         id, customerName: custName(), customerPhone: custPhone(),
@@ -632,7 +651,7 @@ async function main() {
             id: uuid(), body: msg.text, repairId: id, authorId: fromTech ? U.TECH.id : seller, fromTech, createdAt: t,
           });
           t = addHours(t, randInt(3, 20));
-          if (t > TODAY) t = addHours(TODAY, -1);
+          if (t.getTime() > NOW.getTime()) t = addHours(NOW, -1);
         });
         // notificación al que le toca responder según el último comentario
         const last = thread[thread.length - 1];
