@@ -3,22 +3,17 @@
  *
  * Autorización POR USUARIO sobre una sucursal puntual — distinto de
  * findTenantTienda (utils/tienda.js), que solo valida "¿esta sucursal
- * pertenece a este tenant?". Esta función responde una pregunta distinta:
- * "¿ESTE usuario puede operar ESTA sucursal en particular?".
+ * pertenece a este tenant?". Esta función responde: "¿ESTE usuario puede
+ * operar ESTA sucursal en particular?".
  *
- * Hoy es EXCLUSIVA del módulo StockTransfer — POS/Caja/Compras siguen sin
- * restringir por la tienda propia del usuario (ver comentario junto a
- * User.tiendaId en schema.prisma). Se implementa acá, separada de
- * findTenantTienda, para no tocar el comportamiento de ningún otro módulo.
- *
- * OWNER/ADMIN/SUPERADMIN: sin restricción (mismo bypass que ya usa
- * authorize() en auth.middleware.js).
- * SELLER/TECH: solo pueden operar la sucursal que tienen asignada
- * (User.tiendaId). Un usuario sin tiendaId asignada (tiendaId=null) queda
- * bloqueado de TODA sucursal — fail closed, no fail open — porque no hay
- * forma de saber a cuál sucursal pertenece.
+ * Se usa solo en el módulo StockTransfer. Desde que la regla de roles pasó a
+ * "OWNER/ADMIN/SELLER = acceso total, TECH = solo Reparaciones", TODOS los
+ * roles que llegan a esos endpoints (OWNER/ADMIN/SELLER/SUPERADMIN — TECH está
+ * bloqueado a nivel de ruta) son unrestricted, así que en la práctica esto
+ * siempre devuelve true. Se mantiene por si a futuro se reintroduce un rol
+ * scopeado por sucursal.
  */
-const UNRESTRICTED_ROLES = ['OWNER', 'ADMIN', 'SUPERADMIN'];
+const UNRESTRICTED_ROLES = ['OWNER', 'ADMIN', 'SELLER', 'SUPERADMIN'];
 
 const assertTiendaAccess = (user, tiendaId) => {
   if (UNRESTRICTED_ROLES.includes(user.role)) return true;

@@ -12,7 +12,7 @@ const AdminRoute = () => {
 
   if (loading) return <Spinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'SUPERADMIN') return <Navigate to="/dashboard" replace />;
+  if (user.role !== 'SUPERADMIN') return <Navigate to={user.role === 'TECH' ? '/repairs' : '/dashboard'} replace />;
 
   return <Outlet />;
 };

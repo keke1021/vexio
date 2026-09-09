@@ -457,16 +457,13 @@ const cancelItem = async (req, res) => {
 
 /**
  * GET /api/stock-transfers?tiendaId=&direction=incoming|outgoing&status=
- * - OWNER/ADMIN/SUPERADMIN: sin tiendaId ven TODO el tenant; con tiendaId
- *   filtran a esa sucursal.
- * - SELLER/TECH: `tiendaId` es OBLIGATORIO y tiene que ser su sucursal
- *   asignada (assertTiendaAccess). El listado completo sin filtrar es
- *   exclusivo de OWNER/ADMIN — sin `tiendaId` reciben 403, no un volcado
- *   parcial. La UI (TransfersMain) siempre manda `tiendaId`.
+ * OWNER/ADMIN/SELLER/SUPERADMIN: sin tiendaId ven TODO el tenant; con tiendaId
+ * filtran a esa sucursal. (TECH no accede a este módulo — gate a nivel de
+ * ruta.)
  */
 const getTransfers = async (req, res) => {
   try {
-    const { tenantId, role } = req.user;
+    const { tenantId } = req.user;
     const { tiendaId, direction, status, page = 1, pageSize = 20 } = req.query;
 
     let tiendaFilter = {};
@@ -480,9 +477,9 @@ const getTransfers = async (req, res) => {
       if (direction === 'outgoing') tiendaFilter = { fromTiendaId: tiendaId };
       else if (direction === 'incoming') tiendaFilter = { toTiendaId: tiendaId };
       else tiendaFilter = { OR: [{ fromTiendaId: tiendaId }, { toTiendaId: tiendaId }] };
-    } else if (!['OWNER', 'ADMIN', 'SUPERADMIN'].includes(role)) {
-      return res.status(403).json({ message: 'Indicá tu sucursal para ver sus transferencias.' });
     }
+    // Sin tiendaId: todos los roles con acceso al módulo ven el listado
+    // completo del tenant (TECH está bloqueado a nivel de ruta).
 
     const pageNum = Math.max(parseInt(page) || 1, 1);
     const pageSizeNum = Math.max(parseInt(pageSize) || 20, 1);

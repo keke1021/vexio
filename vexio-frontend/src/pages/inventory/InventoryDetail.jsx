@@ -48,7 +48,7 @@ const InventoryDetail = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const canWrite = ['OWNER', 'ADMIN'].includes(user?.role);
+  const canWrite = ['OWNER', 'ADMIN', 'SELLER'].includes(user?.role);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({});

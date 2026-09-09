@@ -50,10 +50,17 @@ const App = () => (
 
       <Route element={<PrivateRoute />}>
         <Route element={<Layout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-
-          {/* /reports redirects to /dashboard (which shows reports) */}
-          <Route path="/reports" element={<Navigate to="/dashboard" replace />} />
+          {/* Inicio (dashboard de Reportes) + Soporte: tier completo
+              (OWNER/ADMIN/SELLER). TECH no — RoleRoute sin `module` lo manda
+              a /repairs. */}
+          <Route element={<RoleRoute />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            {/* /reports redirects to /dashboard (which shows reports) */}
+            <Route path="/reports" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/tickets"       element={<TicketsList />} />
+            <Route path="/tickets/new"   element={<TicketsNew />} />
+            <Route path="/tickets/:id"   element={<TicketDetail />} />
+          </Route>
 
           {/* Módulos gateados por rol (mismo criterio que el backend valida
               en cash / pos / suppliers / stockTransfers routes). */}
@@ -94,11 +101,9 @@ const App = () => (
             <Route path="/transfers/:id" element={<TransferDetail />} />
           </Route>
 
+          {/* Cambio de contraseña propia: disponible para todos los roles
+              autenticados, incluido TECH (self-service de cuenta). */}
           <Route path="/settings/password" element={<ChangePassword />} />
-
-          <Route path="/tickets"       element={<TicketsList />} />
-          <Route path="/tickets/new"   element={<TicketsNew />} />
-          <Route path="/tickets/:id"   element={<TicketDetail />} />
         </Route>
       </Route>
 

@@ -1,14 +1,17 @@
 /**
  * Verificación de autorización por rol — Vexio
  *
- * Levanta un tenant descartable (slug fijo `role-authz-test`, se borra y
- * recrea en cada corrida) con 3 sucursales (A, B, C) y usuarios
- * OWNER / SELLER_A / TECH_A / SELLER_B / SELLER_C / SELLER_SIN_SUCURSAL,
- * corre ~55 casos contra el backend local y borra todo al final (y también
- * si algo explota en el medio).
+ * Regla vigente:
+ *   OWNER / ADMIN / SELLER  → acceso TOTAL a todo el sistema (mismos módulos,
+ *     misma lectura y escritura, sin excepciones).
+ *   TECH  → SOLO el módulo de Reparaciones. 403 en todo lo demás. Se le dejan
+ *     abiertos /notifications y /rates (chrome compartido) y /auth/password.
  *
- * Uso:  (con el backend corriendo en :3001, desde vexio-backend/)
- *   node role-authz-test.mjs
+ * Levanta un tenant descartable (slug fijo `role-authz-test`), corre las
+ * comprobaciones contra el backend local :3001 y borra todo al final (y si
+ * algo explota en el medio).
+ *
+ * Uso (con el backend corriendo, desde vexio-backend/):  node role-authz-test.mjs
  */
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
@@ -58,33 +61,27 @@ async function setup() {
   });
   const tiendaA = await prisma.tienda.create({ data: { name: 'Sucursal A', tenantId: tenant.id } });
   const tiendaB = await prisma.tienda.create({ data: { name: 'Sucursal B', tenantId: tenant.id } });
-  const tiendaC = await prisma.tienda.create({ data: { name: 'Sucursal C', tenantId: tenant.id } });
 
   const mkUser = (email, role, tiendaId) =>
     prisma.user.create({ data: { email, name: email.split('@')[0], password: hashed, role, tenantId: tenant.id, tiendaId } });
 
-  const owner    = await mkUser('owner@authztest.local',      'OWNER',  null);
-  const sellerA  = await mkUser('seller-a@authztest.local',   'SELLER', tiendaA.id);
-  const techA    = await mkUser('tech-a@authztest.local',     'TECH',   tiendaA.id);
-  const sellerB  = await mkUser('seller-b@authztest.local',   'SELLER', tiendaB.id);
-  const sellerC  = await mkUser('seller-c@authztest.local',   'SELLER', tiendaC.id);
-  const sellerNo = await mkUser('seller-none@authztest.local','SELLER', null);
+  const owner  = await mkUser('owner@authztest.local',  'OWNER',  null);
+  const seller = await mkUser('seller@authztest.local', 'SELLER', tiendaA.id);
+  const tech   = await mkUser('tech@authztest.local',   'TECH',   tiendaA.id);
 
   const product = await prisma.product.create({ data: { name: 'iPhone Authz', color: 'Negro', storage: '128GB', minStock: 0, tenantId: tenant.id } });
-  const mkItem = (imei, tiendaId) =>
+  let n = 0;
+  const mkItem = (tiendaId) =>
     prisma.inventoryItem.create({
-      data: { imei, condition: 'NEW', status: 'AVAILABLE', costPrice: 100, salePrice: 200, currencyCode: 'ARS', productId: product.id, tenantId: tenant.id, tiendaId },
+      data: { imei: `AUTHZ-${String(++n).padStart(3, '0')}`, condition: 'NEW', status: 'AVAILABLE',
+              costPrice: 100, salePrice: 200, currencyCode: 'ARS', productId: product.id, tenantId: tenant.id, tiendaId },
     });
-  const itemA1 = await mkItem('AUTHZ-A-1', tiendaA.id);
-  const itemA2 = await mkItem('AUTHZ-A-2', tiendaA.id);
-  const itemA3 = await mkItem('AUTHZ-A-3', tiendaA.id);
-  const itemA4 = await mkItem('AUTHZ-A-4', tiendaA.id);
-  const itemB1 = await mkItem('AUTHZ-B-1', tiendaB.id);
+  const itemsA = []; for (let i = 0; i < 5; i++) itemsA.push(await mkItem(tiendaA.id));
+  const itemsB = []; for (let i = 0; i < 3; i++) itemsB.push(await mkItem(tiendaB.id));
 
   const delivery = await prisma.delivery.create({ data: { name: 'Fletero Test', phone: '1122334455', tenantId: tenant.id } });
 
-  return { tenant, tiendaA, tiendaB, tiendaC, owner, sellerA, techA, sellerB, sellerC, sellerNo,
-           itemA1, itemA2, itemA3, itemA4, itemB1, delivery };
+  return { tenant, tiendaA, tiendaB, owner, seller, tech, product, itemsA, itemsB, delivery };
 }
 
 // ─── helpers HTTP ────────────────────────────────────────────────────────────
@@ -121,170 +118,171 @@ const checkTrue = (label, cond) => {
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${label}`);
 };
 
+let T; // tokens
+
+// SELLER debe comportarse EXACTAMENTE como OWNER: mismo status y ambos 2xx.
+const sameAsOwner = async (label, method, path, body) => {
+  const [o, s] = await Promise.all([
+    req(method, path, T.OWNER, body),
+    req(method, path, T.SELLER, body),
+  ]);
+  const ok = o.status === s.status && s.status >= 200 && s.status < 300;
+  if (!ok) failures++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  SELLER==OWNER  ${label}  (owner ${o.status} / seller ${s.status})`);
+};
+
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('[setup] creando tenant descartable con 3 sucursales...');
+  console.log('[setup] creando tenant descartable (2 sucursales, OWNER/SELLER/TECH)...');
   const s = await setup();
-
-  const T = {
-    OWNER:     await login(s.owner.email),
-    SELLER_A:  await login(s.sellerA.email),
-    TECH_A:    await login(s.techA.email),
-    SELLER_B:  await login(s.sellerB.email),
-    SELLER_C:  await login(s.sellerC.email),
-    SELLER_NO: await login(s.sellerNo.email),
+  T = {
+    OWNER:  await login(s.owner.email),
+    SELLER: await login(s.seller.email),
+    TECH:   await login(s.tech.email),
   };
+  const A = s.tiendaA.id, B = s.tiendaB.id;
 
-  // ═══ PARTE A — filtrado de módulos por rol (sesión 9) ═══════════════════════
-  console.log('\n=== PARTE A: módulos por rol ===');
+  // ═══ PARTE A — TECH: SOLO Reparaciones ════════════════════════════════════
+  console.log('\n=== PARTE A: TECH solo tiene Reparaciones ===');
 
-  check('TECH  GET  /cash/current',        (await req('GET','/cash/current?tiendaId='+s.tiendaA.id, T.TECH_A)).status, 403);
-  check('TECH  GET  /cash/summary',        (await req('GET','/cash/summary?tiendaId='+s.tiendaA.id, T.TECH_A)).status, 403);
-  check('TECH  POST /cash/open',           (await req('POST','/cash/open', T.TECH_A, { tiendaId: s.tiendaA.id })).status, 403);
-  check('TECH  GET  /pos/search-item',     (await req('GET','/pos/search-item?q=a', T.TECH_A)).status, 403);
-  check('TECH  POST /pos/sales',           (await req('POST','/pos/sales', T.TECH_A, {})).status, 403);
-  check('TECH  GET  /pos/sales',           (await req('GET','/pos/sales', T.TECH_A)).status, 403);
-  check('TECH  GET  /suppliers',           (await req('GET','/suppliers', T.TECH_A)).status, 403);
-  check('TECH  GET  /suppliers/x',         (await req('GET','/suppliers/x', T.TECH_A)).status, 403);
-  check('TECH  GET  /suppliers/x/orders',  (await req('GET','/suppliers/x/orders', T.TECH_A)).status, 403);
-  check('TECH  GET  /stock-transfers (sin tiendaId = listado completo)', (await req('GET','/stock-transfers', T.TECH_A)).status, 403);
-  check('TECH  GET  /repairs',             (await req('GET','/repairs', T.TECH_A)).status, 200);
-  check('TECH  GET  /tickets',             (await req('GET','/tickets', T.TECH_A)).status, 200);
-  check('TECH  GET  /notifications',       (await req('GET','/notifications', T.TECH_A)).status, 200);
-  check('TECH  GET  /rates',               (await req('GET','/rates', T.TECH_A)).status, 200);
-  check('TECH  GET  /inventory',           (await req('GET','/inventory', T.TECH_A)).status, 200);
-
-  check('SELLER GET  /cash/current',       (await req('GET','/cash/current?tiendaId='+s.tiendaA.id, T.SELLER_A)).status, 200);
-  check('SELLER GET  /pos/sales',          (await req('GET','/pos/sales', T.SELLER_A)).status, 200);
-  check('SELLER GET  /suppliers',          (await req('GET','/suppliers', T.SELLER_A)).status, 200);
-  check('SELLER GET  /notifications',      (await req('GET','/notifications', T.SELLER_A)).status, 200);
-  check('SELLER GET  /suppliers/x (pasa authz, 404 por id inexistente)', (await req('GET','/suppliers/x', T.SELLER_A)).status, 404);
-  check('SELLER POST /cash/open',          (await req('POST','/cash/open', T.SELLER_A, { tiendaId: s.tiendaA.id })).status, 403);
-  check('SELLER GET  /stock-transfers (sin tiendaId = listado completo)', (await req('GET','/stock-transfers', T.SELLER_A)).status, 403);
-  check('SELLER GET  /reports/sales',      (await req('GET','/reports/sales?from=2020-01-01&to=2030-01-01', T.SELLER_A)).status, 403);
-
-  check('OWNER  GET  /pos/sales',          (await req('GET','/pos/sales', T.OWNER)).status, 200);
-  check('OWNER  GET  /stock-transfers',    (await req('GET','/stock-transfers', T.OWNER)).status, 200);
-  check('OWNER  GET  /suppliers',          (await req('GET','/suppliers', T.OWNER)).status, 200);
-  check('OWNER  GET  /reports/sales',      (await req('GET','/reports/sales?from=2020-01-01&to=2030-01-01', T.OWNER)).status, 200);
-  check('OWNER  GET  /tickets',            (await req('GET','/tickets', T.OWNER)).status, 200);
-
-  // ═══ PARTE B — transferencias: SELLER/TECH por su propia sucursal ═══════════
-  console.log('\n=== PARTE B: transferencias por sucursal ===');
-
-  // Crear
-  const create1 = await req('POST','/stock-transfers/items', T.SELLER_A, { inventoryItemId: s.itemA1.id, toTiendaId: s.tiendaB.id });
-  check('SELLER_A crea transfer A->B (propia)', create1.status, 201);
-  const transfer1Id = create1.data?.id;
-
-  check('SELLER_B crea transfer sacando de A (ajena)',
-    (await req('POST','/stock-transfers/items', T.SELLER_B, { inventoryItemId: s.itemA2.id, toTiendaId: s.tiendaB.id })).status, 403);
-
-  check('TECH_A crea transfer A->B (propia)',
-    (await req('POST','/stock-transfers/items', T.TECH_A, { inventoryItemId: s.itemA2.id, toTiendaId: s.tiendaB.id })).status, 201);
-
-  check('SELLER_NO (sin sucursal) crea transfer',
-    (await req('POST','/stock-transfers/items', T.SELLER_NO, { inventoryItemId: s.itemA3.id, toTiendaId: s.tiendaB.id })).status, 403);
-
-  // Despachar (origen)
-  check('SELLER_A despacha su lote (origen)',
-    (await req('POST',`/stock-transfers/${transfer1Id}/dispatch`, T.SELLER_A, { deliveryId: s.delivery.id })).status, 200);
-
-  // Recibir (destino)
-  check('TECH_A recibe lote destinado a B (ajena)',
-    (await req('POST',`/stock-transfers/${transfer1Id}/receive-all`, T.TECH_A)).status, 403);
-  check('SELLER_B recibe lote en B (destino propio)',
-    (await req('POST',`/stock-transfers/${transfer1Id}/receive-all`, T.SELLER_B)).status, 200);
-
-  // Listado: completo (sin tiendaId) solo OWNER/ADMIN; con ?tiendaId propia OK; ajena 403
-  check('SELLER_A GET /stock-transfers (sin tiendaId)',              (await req('GET','/stock-transfers', T.SELLER_A)).status, 403);
-  check('TECH_A   GET /stock-transfers (sin tiendaId)',              (await req('GET','/stock-transfers', T.TECH_A)).status, 403);
-  const listAOwn = await req('GET','/stock-transfers?tiendaId='+s.tiendaA.id, T.SELLER_A);
-  check('SELLER_A GET /stock-transfers?tiendaId=propia',             listAOwn.status, 200);
-  check('SELLER_A GET /stock-transfers?tiendaId=ajena (B)',          (await req('GET','/stock-transfers?tiendaId='+s.tiendaB.id, T.SELLER_A)).status, 403);
-  check('TECH_A   GET /stock-transfers?tiendaId=propia',             (await req('GET','/stock-transfers?tiendaId='+s.tiendaA.id, T.TECH_A)).status, 200);
-
-  // Contenido del listado scopeado: SELLER_B arma un B->C que NO toca A.
-  const bc = await req('POST','/stock-transfers/items', T.SELLER_B, { inventoryItemId: s.itemB1.id, toTiendaId: s.tiendaC.id });
-  check('SELLER_B crea transfer B->C (origen propio)', bc.status, 201);
-  const bcId = bc.data?.id;
-  const ownerFull = await req('GET','/stock-transfers', T.OWNER);
-  checkTrue('OWNER ve el B->C en el listado completo', (ownerFull.data?.transfers ?? []).some((t) => t.id === bcId));
-  const listAOwn2 = await req('GET','/stock-transfers?tiendaId='+s.tiendaA.id, T.SELLER_A);
-  const rowsA = listAOwn2.data?.transfers ?? [];
-  checkTrue('SELLER_A NO ve el B->C en su listado scopeado', !rowsA.some((t) => t.id === bcId));
-  checkTrue('SELLER_A: todas las filas de su listado tocan la sucursal A',
-    rowsA.length > 0 && rowsA.every((t) => t.fromTienda?.id === s.tiendaA.id || t.toTienda?.id === s.tiendaA.id));
-
-  // Cancelar una transferencia ya creada → solo OWNER/ADMIN
-  const create5 = await req('POST','/stock-transfers/items', T.TECH_A, { inventoryItemId: s.itemA3.id, toTiendaId: s.tiendaB.id });
-  const transfer2Id = create5.data?.id;
-  const item2 = create5.data?.transferItems?.[0]?.id;
-  check('SELLER_A cancela ítem de transfer (ya creada)', (await req('POST',`/stock-transfers/${transfer2Id}/items/${item2}/cancel`, T.SELLER_A, { reason: 'test' })).status, 403);
-  check('TECH_A   cancela ítem de transfer (ya creada)', (await req('POST',`/stock-transfers/${transfer2Id}/items/${item2}/cancel`, T.TECH_A, { reason: 'test' })).status, 403);
-  check('OWNER    cancela ítem de transfer (ya creada)', (await req('POST',`/stock-transfers/${transfer2Id}/items/${item2}/cancel`, T.OWNER, { reason: 'test' })).status, 200);
-
-  // Ver una transferencia puntual (assertTiendaAccess adentro)
-  check('SELLER_B  GET /stock-transfers/:id (destino propio)',  (await req('GET',`/stock-transfers/${transfer1Id}`, T.SELLER_B)).status, 200);
-  check('SELLER_C  GET /stock-transfers/:id (ajena)',           (await req('GET',`/stock-transfers/${transfer1Id}`, T.SELLER_C)).status, 403);
-  check('SELLER_NO GET /stock-transfers/:id (ninguna suya)',    (await req('GET',`/stock-transfers/${transfer1Id}`, T.SELLER_NO)).status, 403);
-
-  // ABM del catálogo de fleteros → solo OWNER/ADMIN
-  check('SELLER_A POST /stock-transfers/deliveries', (await req('POST','/stock-transfers/deliveries', T.SELLER_A, { name: 'x', phone: '123' })).status, 403);
-  check('SELLER_A GET  /stock-transfers/deliveries (lo precisa el dispatch)', (await req('GET','/stock-transfers/deliveries', T.SELLER_A)).status, 200);
-  check('OWNER    POST /stock-transfers/deliveries', (await req('POST','/stock-transfers/deliveries', T.OWNER, { name: 'Fletero 2', phone: '999' })).status, 201);
-
-  // Segunda vía de "crear": armar lote nuevo desde la propia sucursal
-  check('SELLER_A crea 2do transfer A->B (propia)',
-    (await req('POST','/stock-transfers/items', T.SELLER_A, { inventoryItemId: s.itemA4.id, toTiendaId: s.tiendaB.id })).status, 201);
-
-  // ═══ PARTE C — Proveedores: SELLER acceso COMPLETO (no solo lectura) ════════
-  console.log('\n=== PARTE C: proveedores (SELLER acceso completo, TECH sin acceso) ===');
-
-  // SELLER: alta de proveedor
-  const supCreate = await req('POST','/suppliers', T.SELLER_A, { name: 'Proveedor Test', city: 'CABA', paymentDays: 30, phone: '11-4444-0000' });
-  check('SELLER POST /suppliers (alta)', supCreate.status, 201);
-  const supId = supCreate.data?.id;
-
-  // SELLER: listado, detalle, edición
-  check('SELLER GET  /suppliers (listado)',        (await req('GET','/suppliers', T.SELLER_A)).status, 200);
-  check('SELLER GET  /suppliers/:id (detalle)',    (await req('GET',`/suppliers/${supId}`, T.SELLER_A)).status, 200);
-  check('SELLER PUT  /suppliers/:id (edición)',    (await req('PUT',`/suppliers/${supId}`, T.SELLER_A, { notes: 'editado por seller' })).status, 200);
-
-  // SELLER: historial de órdenes / pagos (vacío todavía)
-  check('SELLER GET  /suppliers/:id/orders (historial)', (await req('GET',`/suppliers/${supId}/orders`, T.SELLER_A)).status, 200);
-
-  // SELLER: crear orden de compra
-  const ordCreate = await req('POST',`/suppliers/${supId}/orders`, T.SELLER_A, {
-    currency: 'ARS',
-    items: [{ description: 'Lote iPhone usado', quantity: 3, unitPrice: 50000 }],
+  // Reparaciones: acceso completo (salvo DELETE)
+  check('TECH GET  /repairs',              (await req('GET','/repairs', T.TECH)).status, 200);
+  check('TECH GET  /repairs/stats',        (await req('GET','/repairs/stats', T.TECH)).status, 200);
+  check('TECH GET  /repairs/technicians',  (await req('GET','/repairs/technicians', T.TECH)).status, 200);
+  const techRepair = await req('POST','/repairs', T.TECH, {
+    customerName: 'Cliente TECH', customerPhone: '111', deviceModel: 'iPhone 12',
+    faultType: 'SCREEN', faultDescription: 'rota',
   });
-  check('SELLER POST /suppliers/:id/orders (orden de compra)', ordCreate.status, 201);
-  const ordId = ordCreate.data?.id;
+  check('TECH POST /repairs',              techRepair.status, 201);
+  const techRepairId = techRepair.data?.id;
+  check('TECH GET  /repairs/:id (propia)', (await req('GET',`/repairs/${techRepairId}`, T.TECH)).status, 200);
+  check('TECH PUT  /repairs/:id (propia)', (await req('PUT',`/repairs/${techRepairId}`, T.TECH, { internalNotes: 'diag' })).status, 200);
+  check('TECH DELETE /repairs/:id (reservado a OWNER/ADMIN/SELLER)', (await req('DELETE',`/repairs/${techRepairId}`, T.TECH)).status, 403);
 
-  // SELLER: registrar un pago / cobro sobre la orden (source EXTERNAL, sin caja)
-  check('SELLER POST /suppliers/orders/:id/payments (pago externo)',
-    (await req('POST',`/suppliers/orders/${ordId}/payments`, T.SELLER_A, { amount: 40000, currency: 'ARS', source: 'EXTERNAL' })).status, 201);
+  // Todo lo demás: 403
+  const techForbidden = [
+    ['GET',  `/cash/current?tiendaId=${A}`],
+    ['GET',  `/cash/summary?tiendaId=${A}`],
+    ['GET',  `/cash/sessions?tiendaId=${A}`],
+    ['POST', '/cash/open', { tiendaId: A }],
+    ['POST', '/cash/movements', { tiendaId: A, type: 'INCOME', amount: 1, description: 'x', paymentMethod: 'CASH', currencyCode: 'ARS' }],
+    ['GET',  '/pos/sales'],
+    ['GET',  '/pos/search-item?q=x'],
+    ['POST', '/pos/sales', {}],
+    ['GET',  '/inventory'],
+    ['GET',  '/inventory/alerts'],
+    ['GET',  '/products'],
+    ['GET',  '/tiendas'],
+    ['POST', '/inventory', { tiendaId: A }],
+    ['GET',  '/suppliers'],
+    ['GET',  '/suppliers/whatever'],
+    ['GET',  '/suppliers/whatever/orders'],
+    ['POST', '/suppliers', { name: 'x' }],
+    ['GET',  '/reports/sales?from=2020-01-01&to=2030-01-01'],
+    ['GET',  '/reports/cash?from=2020-01-01&to=2030-01-01'],
+    ['GET',  '/reports/inventory'],
+    ['GET',  '/reports/products?from=2020-01-01&to=2030-01-01'],
+    ['GET',  '/reports/repairs?from=2020-01-01&to=2030-01-01'],
+    ['GET',  '/stock-transfers'],
+    ['GET',  `/stock-transfers?tiendaId=${A}`],
+    ['GET',  '/stock-transfers/deliveries'],
+    ['POST', '/stock-transfers/items', { inventoryItemId: s.itemsA[0].id, toTiendaId: B }],
+    ['GET',  '/tickets'],
+    ['POST', '/tickets', { title: 't', description: 'd', category: 'CONSULTA_GENERAL' }],
+  ];
+  for (const [m, p, b] of techForbidden) {
+    check(`TECH ${m.padEnd(4)} ${p.split('?')[0]}`, (await req(m, p, T.TECH, b)).status, 403);
+  }
 
-  // SELLER: la orden ahora aparece con su pago en el historial
-  const ordersAfter = await req('GET',`/suppliers/${supId}/orders`, T.SELLER_A);
-  checkTrue('SELLER ve la orden con 1 pago en el historial',
-    (ordersAfter.data?.orders ?? []).some((o) => o.id === ordId && (o.payments ?? []).length === 1));
+  // Mínimo dejado a TECH para que la app no rompa (chrome compartido / cuenta)
+  check('TECH GET /notifications (bell del Layout — se deja)', (await req('GET','/notifications', T.TECH)).status, 200);
+  check('TECH GET /rates (se deja)',                           (await req('GET','/rates', T.TECH)).status, 200);
 
-  // SELLER: baja de proveedor (soft-delete). Se usa un proveedor aparte sin
-  // órdenes — el controller rechaza (409) si tiene órdenes PENDING, y `supId`
-  // tiene una.
-  const supCreate2 = await req('POST','/suppliers', T.SELLER_A, { name: 'Proveedor A Borrar', city: 'CABA', paymentDays: 30 });
-  check('SELLER DELETE /suppliers/:id (baja)', (await req('DELETE',`/suppliers/${supCreate2.data?.id}`, T.SELLER_A)).status, 200);
+  // ═══ PARTE B — SELLER == OWNER en lecturas ════════════════════════════════
+  console.log('\n=== PARTE B: SELLER == OWNER (lecturas) ===');
 
-  // TECH: sin acceso a NADA de proveedores
-  check('TECH GET  /suppliers',            (await req('GET','/suppliers', T.TECH_A)).status, 403);
-  check('TECH GET  /suppliers/:id',        (await req('GET',`/suppliers/${supId}`, T.TECH_A)).status, 403);
-  check('TECH POST /suppliers',            (await req('POST','/suppliers', T.TECH_A, { name: 'x' })).status, 403);
-  check('TECH GET    /suppliers/:id/orders', (await req('GET',`/suppliers/${supId}/orders`, T.TECH_A)).status, 403);
-  check('TECH POST   /suppliers/orders/:id/payments', (await req('POST',`/suppliers/orders/${ordId}/payments`, T.TECH_A, { amount: 1, currency: 'ARS', source: 'EXTERNAL' })).status, 403);
-  check('TECH DELETE /suppliers/:id',        (await req('DELETE',`/suppliers/${supId}`, T.TECH_A)).status, 403);
+  await sameAsOwner('GET /cash/current',      'GET', `/cash/current?tiendaId=${A}`);
+  await sameAsOwner('GET /cash/summary',      'GET', `/cash/summary?tiendaId=${A}`);
+  await sameAsOwner('GET /cash/sessions',     'GET', `/cash/sessions?tiendaId=${A}`);
+  await sameAsOwner('GET /pos/sales',         'GET', '/pos/sales');
+  await sameAsOwner('GET /pos/search-item',   'GET', '/pos/search-item?q=iphone');
+  await sameAsOwner('GET /inventory',         'GET', '/inventory');
+  await sameAsOwner('GET /inventory/alerts',  'GET', '/inventory/alerts');
+  await sameAsOwner('GET /products',          'GET', '/products');
+  await sameAsOwner('GET /tiendas',           'GET', '/tiendas');
+  await sameAsOwner('GET /suppliers',         'GET', '/suppliers');
+  await sameAsOwner('GET /reports/sales',     'GET', '/reports/sales?from=2020-01-01&to=2030-01-01');
+  await sameAsOwner('GET /reports/products',  'GET', '/reports/products?from=2020-01-01&to=2030-01-01');
+  await sameAsOwner('GET /reports/inventory', 'GET', '/reports/inventory');
+  await sameAsOwner('GET /reports/repairs',   'GET', '/reports/repairs?from=2020-01-01&to=2030-01-01');
+  await sameAsOwner('GET /reports/cash',      'GET', '/reports/cash?from=2020-01-01&to=2030-01-01');
+  await sameAsOwner('GET /stock-transfers (listado completo, sin tiendaId)', 'GET', '/stock-transfers');
+  await sameAsOwner('GET /stock-transfers?tiendaId=B (cualquier sucursal)',  'GET', `/stock-transfers?tiendaId=${B}`);
+  await sameAsOwner('GET /stock-transfers/deliveries', 'GET', '/stock-transfers/deliveries');
+  await sameAsOwner('GET /repairs',           'GET', '/repairs');
+  await sameAsOwner('GET /repairs/technicians','GET', '/repairs/technicians');
+  await sameAsOwner('GET /tickets',           'GET', '/tickets');
+  await sameAsOwner('GET /notifications',     'GET', '/notifications');
+
+  // ═══ PARTE C — SELLER puede ESCRIBIR en todos los módulos ═════════════════
+  console.log('\n=== PARTE C: SELLER escribe en todos los módulos (2xx) ===');
+
+  // Caja: flujo completo en la sucursal B
+  check('SELLER POST /cash/open (B)',      (await req('POST','/cash/open', T.SELLER, { tiendaId: B })).status, 201);
+  check('SELLER POST /cash/movements (B)', (await req('POST','/cash/movements', T.SELLER, {
+    tiendaId: B, type: 'INCOME', amount: 1500, description: 'ajuste', paymentMethod: 'CASH', currencyCode: 'ARS',
+  })).status, 201);
+  check('SELLER POST /cash/close (B)',     (await req('POST','/cash/close', T.SELLER, { tiendaId: B })).status, 200);
+
+  // Inventario
+  const invNew = await req('POST','/inventory', T.SELLER, {
+    tiendaId: A, productName: 'iPhone Authz', color: 'Negro', storage: '128GB',
+    imei: 'AUTHZ-NEW-1', condition: 'NEW', costPrice: 100, salePrice: 300, currencyCode: 'ARS',
+  });
+  check('SELLER POST /inventory', invNew.status, 201);
+  const invId = invNew.data?.id;
+  check('SELLER PUT  /inventory/:id',    (await req('PUT',`/inventory/${invId}`, T.SELLER, { salePrice: 350 })).status, 200);
+  check('SELLER DELETE /inventory/:id',  (await req('DELETE',`/inventory/${invId}`, T.SELLER)).status, 200);
+
+  // Proveedores
+  const sup = await req('POST','/suppliers', T.SELLER, { name: 'Prov SELLER', city: 'CABA', paymentDays: 30 });
+  check('SELLER POST /suppliers', sup.status, 201);
+  const supId = sup.data?.id;
+  check('SELLER PUT  /suppliers/:id', (await req('PUT',`/suppliers/${supId}`, T.SELLER, { notes: 'x' })).status, 200);
+  const ord = await req('POST',`/suppliers/${supId}/orders`, T.SELLER, { currency: 'ARS', items: [{ description: 'lote', quantity: 2, unitPrice: 10000 }] });
+  check('SELLER POST /suppliers/:id/orders', ord.status, 201);
+  check('SELLER POST /suppliers/orders/:id/payments', (await req('POST',`/suppliers/orders/${ord.data?.id}/payments`, T.SELLER, { amount: 5000, currency: 'ARS', source: 'EXTERNAL' })).status, 201);
+  const supBare = await req('POST','/suppliers', T.SELLER, { name: 'Prov a borrar', city: 'CABA', paymentDays: 30 });
+  check('SELLER DELETE /suppliers/:id (baja)', (await req('DELETE',`/suppliers/${supBare.data?.id}`, T.SELLER)).status, 200);
+
+  // Transferencias: SELLER sin restricción de sucursal (== OWNER)
+  const tr = await req('POST','/stock-transfers/items', T.SELLER, { inventoryItemId: s.itemsA[0].id, toTiendaId: B });
+  check('SELLER POST /stock-transfers/items (A->B)', tr.status, 201);
+  const trId = tr.data?.id;
+  check('SELLER POST /stock-transfers/:id/dispatch',    (await req('POST',`/stock-transfers/${trId}/dispatch`, T.SELLER, { deliveryId: s.delivery.id })).status, 200);
+  check('SELLER POST /stock-transfers/:id/receive-all', (await req('POST',`/stock-transfers/${trId}/receive-all`, T.SELLER)).status, 200);
+  const del = await req('POST','/stock-transfers/deliveries', T.SELLER, { name: 'Fletero SELLER', phone: '555' });
+  check('SELLER POST /stock-transfers/deliveries',  del.status, 201);
+  check('SELLER PATCH /stock-transfers/deliveries/:id', (await req('PATCH',`/stock-transfers/deliveries/${del.data?.id}`, T.SELLER, { phone: '556' })).status, 200);
+  // cancelar un ítem de una transferencia recién creada
+  const tr2 = await req('POST','/stock-transfers/items', T.SELLER, { inventoryItemId: s.itemsA[1].id, toTiendaId: B });
+  const tr2ItemId = tr2.data?.transferItems?.[0]?.id;
+  check('SELLER POST /stock-transfers/:id/items/:itemId/cancel', (await req('POST',`/stock-transfers/${tr2.data?.id}/items/${tr2ItemId}/cancel`, T.SELLER, { reason: 'test' })).status, 200);
+
+  // Reparaciones
+  const rep = await req('POST','/repairs', T.SELLER, { customerName: 'C', customerPhone: '1', deviceModel: 'iPhone 13', faultType: 'BATTERY', faultDescription: 'no carga' });
+  check('SELLER POST /repairs', rep.status, 201);
+  check('SELLER PUT  /repairs/:id',    (await req('PUT',`/repairs/${rep.data?.id}`, T.SELLER, { budget: 20000 })).status, 200);
+  check('SELLER DELETE /repairs/:id',  (await req('DELETE',`/repairs/${rep.data?.id}`, T.SELLER)).status, 200);
+
+  // Soporte
+  check('SELLER POST /tickets', (await req('POST','/tickets', T.SELLER, { title: 't', description: 'd', category: 'CONSULTA_GENERAL' })).status, 201);
+
+  // POS: crear venta necesita un carrito válido (fuera del alcance de este
+  // script) — se verifica solo que el authz pasa (no 401/403).
+  const posSale = await req('POST','/pos/sales', T.SELLER, {});
+  checkTrue(`SELLER POST /pos/sales pasa authz (status ${posSale.status}, no 401/403)`, posSale.status !== 401 && posSale.status !== 403);
 
   console.log('\n[teardown] borrando tenant descartable...');
   await wipe(s.tenant.id);

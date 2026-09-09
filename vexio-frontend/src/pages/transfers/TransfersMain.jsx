@@ -5,7 +5,9 @@ import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import NewTransferModal from './NewTransferModal';
 
-const UNRESTRICTED_ROLES = ['OWNER', 'ADMIN', 'SUPERADMIN'];
+// OWNER/ADMIN/SELLER: acceso total (todas las sucursales, listado completo).
+// TECH no entra a este módulo. `branchLocked` quedó, en la práctica, inerte.
+const UNRESTRICTED_ROLES = ['OWNER', 'ADMIN', 'SELLER', 'SUPERADMIN'];
 
 const STATUS_BADGE = {
   OPEN:       { label: 'Abierto',   cls: 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]' },

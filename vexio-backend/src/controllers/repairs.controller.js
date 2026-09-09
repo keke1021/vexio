@@ -49,7 +49,7 @@ const getTechnicians = async (req, res) => {
   try {
     const { tenantId } = req.user;
     const technicians = await prisma.user.findMany({
-      where: { tenantId, isActive: true, role: { in: ['TECH', 'ADMIN', 'OWNER'] } },
+      where: { tenantId, isActive: true, role: { in: ['TECH', 'ADMIN', 'OWNER', 'SELLER'] } },
       select: { id: true, name: true, role: true },
       orderBy: { name: 'asc' },
     });

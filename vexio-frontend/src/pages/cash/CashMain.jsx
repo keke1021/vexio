@@ -301,7 +301,7 @@ const ClosePanel = ({ byCurrency, onClose, isPending, onCancel }) => {
 const CashMain = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const canManage = ['OWNER', 'ADMIN'].includes(user?.role);
+  const canManage = ['OWNER', 'ADMIN', 'SELLER'].includes(user?.role);
 
   const [showClose, setShowClose] = useState(false);
   const [error, setError] = useState('');

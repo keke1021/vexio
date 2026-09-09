@@ -53,7 +53,7 @@ export const StatusBadge = ({ status, size = 'sm' }) => {
 const RepairsList = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const canWrite = ['OWNER', 'ADMIN', 'TECH'].includes(user?.role);
+  const canWrite = ['OWNER', 'ADMIN', 'SELLER', 'TECH'].includes(user?.role);
 
   const [statusFilter, setStatusFilter] = useState('');
   const [techFilter, setTechFilter] = useState('');
@@ -76,7 +76,7 @@ const RepairsList = () => {
     queryKey: ['repairs-technicians'],
     queryFn: () => api.get('/repairs/technicians').then((r) => r.data),
     staleTime: 5 * 60_000,
-    enabled: ['OWNER', 'ADMIN'].includes(user?.role),
+    enabled: ['OWNER', 'ADMIN', 'SELLER'].includes(user?.role),
   });
 
   const repairs = data?.repairs ?? [];
@@ -127,7 +127,7 @@ const RepairsList = () => {
           className="bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-[13px] text-[#0F172A]
             placeholder-[#CBD5E1] focus:outline-none focus:border-[#3B82F6] transition-colors w-64"
         />
-        {['OWNER', 'ADMIN'].includes(user?.role) && (
+        {['OWNER', 'ADMIN', 'SELLER'].includes(user?.role) && (
           <select
             value={techFilter}
             onChange={(e) => setTechFilter(e.target.value)}

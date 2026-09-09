@@ -9,25 +9,24 @@ const {
 
 router.use(authenticate);
 
-// Caja: OWNER/ADMIN/SELLER pueden ver; TECH no accede (ni por nav ni por URL
-// ni por request directo). Las escrituras (open/close/movements) siguen
-// restringidas a OWNER/ADMIN.
-// NB: el authorize va por-ruta y NO como router.use(...) — este router está
-// montado en el prefijo compartido '/api', así que un router.use(authorize)
-// se ejecutaría también para requests de otros módulos que apenas pasan por
-// acá antes de caer en su router real (mismo criterio que el resto del repo).
-const canView = authorize('OWNER', 'ADMIN', 'SELLER');
+// Caja: OWNER/ADMIN/SELLER acceso completo (lectura y escritura). TECH no
+// accede a nada de Caja.
+// NB: authorize por-ruta y NO como router.use(...) — este router está montado
+// en el prefijo compartido '/api', así que un router.use(authorize) se
+// ejecutaría también para requests de otros módulos que apenas pasan por acá
+// antes de caer en su router real.
+const canUseCash = authorize('OWNER', 'ADMIN', 'SELLER');
 
-router.get('/cash/current',   canView, getCurrent);
-router.get('/cash/movements', canView, getMovements);
-router.get('/cash/summary',   canView, getSummary);
+router.get('/cash/current',   canUseCash, getCurrent);
+router.get('/cash/movements', canUseCash, getMovements);
+router.get('/cash/summary',   canUseCash, getSummary);
 
 // IMPORTANTE: /cash/sessions debe estar ANTES de /cash/sessions/:id
-router.get('/cash/sessions',     canView, getSessions);
-router.get('/cash/sessions/:id', canView, getSessionById);
+router.get('/cash/sessions',     canUseCash, getSessions);
+router.get('/cash/sessions/:id', canUseCash, getSessionById);
 
-router.post('/cash/open',      authorize('OWNER', 'ADMIN'), openCash);
-router.post('/cash/close',     authorize('OWNER', 'ADMIN'), closeCash);
-router.post('/cash/movements', authorize('OWNER', 'ADMIN'), addMovement);
+router.post('/cash/open',      canUseCash, openCash);
+router.post('/cash/close',     canUseCash, closeCash);
+router.post('/cash/movements', canUseCash, addMovement);
 
 module.exports = router;

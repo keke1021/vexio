@@ -70,7 +70,7 @@ const AdvancePanel = ({ repair, onAdvance, isLoading }) => {
   const { user } = useAuth();
   const [note, setNote] = useState('');
   const [pendingTransition, setPendingTransition] = useState(null);
-  const canCancel = ['OWNER', 'ADMIN'].includes(user?.role);
+  const canCancel = ['OWNER', 'ADMIN', 'SELLER'].includes(user?.role);
   const transitions = TRANSITIONS[repair.status] ?? [];
 
   const handleAdvance = (to) => {
@@ -160,7 +160,7 @@ const RepairsDetail = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const canEdit = ['OWNER', 'ADMIN'].includes(user?.role);
+  const canEdit = ['OWNER', 'ADMIN', 'SELLER'].includes(user?.role);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({});

@@ -29,10 +29,14 @@ router.get('/tickets/:id/stream', streamTicket);
 
 router.use(authenticate);
 
-router.post('/tickets',              upload.array('attachments', 3), createTicket);
-router.get('/tickets',               getTickets);
-router.get('/tickets/:id',           getTicketById);
-router.post('/tickets/:id/reply',    upload.array('attachments', 3), addReply);
-router.put('/tickets/:id/status',    updateStatus);
+// Soporte: OWNER/ADMIN/SELLER. TECH solo tiene acceso al módulo de
+// Reparaciones — no ve ni el nav de Soporte ni estos endpoints.
+const canUseTickets = authorize('OWNER', 'ADMIN', 'SELLER');
+
+router.post('/tickets',              canUseTickets, upload.array('attachments', 3), createTicket);
+router.get('/tickets',               canUseTickets, getTickets);
+router.get('/tickets/:id',           canUseTickets, getTicketById);
+router.post('/tickets/:id/reply',    canUseTickets, upload.array('attachments', 3), addReply);
+router.put('/tickets/:id/status',    canUseTickets, updateStatus);
 
 module.exports = router;

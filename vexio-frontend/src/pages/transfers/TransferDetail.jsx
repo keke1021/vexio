@@ -11,7 +11,8 @@ const ITEM_STATUS_CFG = {
   CANCELLED:  { label: 'Cancelado',      cls: 'text-red-500 bg-red-50' },
 };
 
-const UNRESTRICTED_ROLES = ['OWNER', 'ADMIN', 'SUPERADMIN'];
+// OWNER/ADMIN/SELLER: acceso total a transferencias, cualquier sucursal.
+const UNRESTRICTED_ROLES = ['OWNER', 'ADMIN', 'SELLER', 'SUPERADMIN'];
 
 const fmtDateTime = (d) =>
   d ? new Date(d).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';

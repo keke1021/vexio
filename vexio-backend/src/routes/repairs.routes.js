@@ -13,10 +13,14 @@ router.use(authenticate);
 router.get('/repairs/stats', getStats);
 router.get('/repairs/technicians', getTechnicians);
 
+// Reparaciones: acceso para OWNER/ADMIN/SELLER/TECH (es el único módulo al que
+// entra TECH). El scope fino "TECH ve/edita solo sus órdenes asignadas" lo
+// resuelve el controller (roleScope). Borrar una orden queda para el tier
+// completo OWNER/ADMIN/SELLER (no TECH).
 router.get('/repairs', getAll);
 router.get('/repairs/:id', getById);
 router.post('/repairs', createRepair);
 router.put('/repairs/:id', updateRepair);
-router.delete('/repairs/:id', authorize('OWNER'), deleteRepair);
+router.delete('/repairs/:id', authorize('OWNER', 'ADMIN', 'SELLER'), deleteRepair);
 
 module.exports = router;

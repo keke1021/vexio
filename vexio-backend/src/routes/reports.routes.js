@@ -7,12 +7,12 @@ const {
 
 router.use(authenticate);
 
-// Reportes: solo OWNER/ADMIN. authorize por-ruta y NO como router.use(...):
-// este router está montado en el prefijo compartido '/api' y ANTES que
-// notifications / tickets / rates, así que un router.use(authorize) los
-// rechazaba de rebote para SELLER/TECH (rompía el bell de notificaciones y
-// el módulo Soporte para esos roles).
-const canViewReports = authorize('OWNER', 'ADMIN');
+// Reportes (dashboard de Inicio): OWNER/ADMIN/SELLER. TECH no accede.
+// authorize por-ruta y NO como router.use(...): este router está montado en el
+// prefijo compartido '/api' y ANTES que notifications / tickets / rates, así
+// que un router.use(authorize) los rechazaba de rebote (rompía el bell de
+// notificaciones para todos los roles no listados).
+const canViewReports = authorize('OWNER', 'ADMIN', 'SELLER');
 
 router.get('/reports/sales',     canViewReports, getSalesReport);
 router.get('/reports/products',  canViewReports, getProductsReport);

@@ -35,7 +35,9 @@ const Login = () => {
     mutationFn: (data) => api.post('/auth/login', data).then((r) => r.data),
     onSuccess: (data) => {
       login(data);
-      navigate(data.user.role === 'SUPERADMIN' ? '/admin' : '/dashboard');
+      const role = data.user.role;
+      // TECH solo tiene Reparaciones — /dashboard lo rebotaría igual.
+      navigate(role === 'SUPERADMIN' ? '/admin' : role === 'TECH' ? '/repairs' : '/dashboard');
     },
     onError: (err) => {
       setError(err.response?.data?.message || 'Error al iniciar sesión.');

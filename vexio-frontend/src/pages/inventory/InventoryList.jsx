@@ -288,7 +288,7 @@ const InventoryList = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const canWrite = ['OWNER', 'ADMIN'].includes(user?.role);
+  const canWrite = ['OWNER', 'ADMIN', 'SELLER'].includes(user?.role);
 
   const PAGE_SIZE = 50;
 
