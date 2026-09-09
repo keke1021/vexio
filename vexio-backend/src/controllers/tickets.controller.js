@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
+const { notify } = require('../utils/notify');
 
 const prisma = new PrismaClient();
 
@@ -209,6 +210,18 @@ const addReply = async (req, res) => {
       await prisma.supportTicket.update({
         where: { id: ticketId },
         data: { status: 'EN_PROCESO' },
+      });
+    }
+
+    // Notificar a quien abrió el ticket que hay una respuesta nueva (típico:
+    // respondió el SUPERADMIN). No se notifica a uno mismo.
+    if (ticket.userId !== userId) {
+      await notify({
+        tenantId: ticket.tenantId,
+        userIds: [ticket.userId],
+        message: `Respuesta en tu ticket de soporte: "${ticket.title}".`,
+        type: 'INFO',
+        link: `/tickets/${ticketId}`,
       });
     }
 

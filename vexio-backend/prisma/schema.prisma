@@ -114,6 +114,7 @@ model User {
 
   ledgerEntries LedgerEntry[]
   conversions   Conversion[]
+  notifications Notification[]
 
   stockTransfersCreated    StockTransfer[] @relation("StockTransferCreator")
   stockTransfersDispatched StockTransfer[] @relation("StockTransferDispatcher")
@@ -1060,7 +1061,21 @@ model Notification {
   tenantId String?
   tenant   Tenant? @relation(fields: [tenantId], references: [id])
 
+  // Destinatario. null => notificación tenant-wide (la ve cualquier usuario del
+  // tenant: alertas de stock bajo, etc. — comportamiento histórico). Seteado =>
+  // notificación DIRIGIDA (transferencia pendiente de recibir, respuesta en un
+  // ticket, respuesta en el thread de una reparación): sólo la ve ese usuario.
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  // Ruta del frontend a la que lleva el click en la campanita (ej.
+  // "/transfers/abc123"). null => la notificación sólo se marca como leída.
+  link String?
+
   createdAt DateTime @default(now())
+
+  @@index([tenantId, read])
+  @@index([userId, read])
 }
 
 // ─── Soporte ──────────────────────────────────────────────────────────────────

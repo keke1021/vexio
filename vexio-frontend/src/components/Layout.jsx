@@ -47,6 +47,7 @@ const NotificationBell = () => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data } = useQuery({
     queryKey:        ['notifications'],
@@ -68,6 +69,14 @@ const NotificationBell = () => {
 
   const notifications = data?.notifications ?? [];
   const count         = data?.count ?? 0;
+
+  const handleClick = (n) => {
+    markOne.mutate(n.id);
+    if (n.link) {
+      setOpen(false);
+      navigate(n.link);
+    }
+  };
 
   const fmtTime = (d) =>
     new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -112,13 +121,16 @@ const NotificationBell = () => {
               notifications.map((n) => (
                 <button
                   key={n.id}
-                  onClick={() => markOne.mutate(n.id)}
+                  onClick={() => handleClick(n)}
                   className="w-full text-left px-4 py-3 border-b border-[#E2E8F0] hover:bg-[#EFF6FF] transition-colors"
                 >
                   <p className={`text-[12px] font-medium ${TYPE_COLORS[n.type] ?? 'text-[#64748B]'}`}>
                     {n.message}
                   </p>
-                  <p className="text-[10px] text-[#64748B] mt-0.5">{fmtTime(n.createdAt)}</p>
+                  <p className="text-[10px] text-[#64748B] mt-0.5">
+                    {fmtTime(n.createdAt)}
+                    {n.link && <span className="ml-1 text-[#3B82F6]">· Ver</span>}
+                  </p>
                 </button>
               ))
             )}

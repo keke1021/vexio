@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const { findTenantTienda } = require('../utils/tienda');
 const { assertTiendaAccess } = require('../utils/tiendaAuth');
+const { notify } = require('../utils/notify');
 
 const prisma = new PrismaClient();
 
@@ -295,6 +296,21 @@ const dispatch = async (req, res) => {
         },
         include: TRANSFER_INCLUDE,
       });
+    });
+
+    // Notificar a los vendedores de la sucursal de destino: hay un lote en
+    // camino para recibir. Best-effort — no vuelca el despacho si falla.
+    const dispatchedCount = (result.transferItems ?? []).filter((it) => it.status === 'DISPATCHED').length;
+    const recipients = await prisma.user.findMany({
+      where: { tenantId, tiendaId: result.toTiendaId, role: 'SELLER', isActive: true, id: { not: userId } },
+      select: { id: true },
+    });
+    await notify({
+      tenantId,
+      userIds: recipients.map((u) => u.id),
+      message: `Transferencia en camino a ${result.toTienda.name} desde ${result.fromTienda.name}: ${dispatchedCount} equipo${dispatchedCount === 1 ? '' : 's'} para recibir.`,
+      type: 'INFO',
+      link: `/transfers/${result.id}`,
     });
 
     res.json(serializeTransfer(result));

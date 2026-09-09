@@ -9,10 +9,12 @@ const prisma = new PrismaClient();
  */
 const getNotifications = async (req, res) => {
   try {
-    const { tenantId, role } = req.user;
+    const { tenantId, role, userId } = req.user;
+    // Un usuario del tenant ve: las tenant-wide (userId null) + las dirigidas a
+    // él. SUPERADMIN sólo ve las suyas (tenantId null; nunca dirigidas).
     const where = role === 'SUPERADMIN'
       ? { tenantId: null, read: false }
-      : { tenantId, read: false };
+      : { tenantId, read: false, OR: [{ userId: null }, { userId }] };
 
     const notifications = await prisma.notification.findMany({
       where,
@@ -33,15 +35,16 @@ const getNotifications = async (req, res) => {
 const markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
-    const { tenantId, role } = req.user;
+    const { tenantId, role, userId } = req.user;
 
     const notification = await prisma.notification.findUnique({ where: { id } });
     if (!notification) return res.status(404).json({ message: 'Notificación no encontrada.' });
 
-    // Verificar pertenencia
+    // Verificar pertenencia: mismo tenant y, si es dirigida, que sea al usuario.
     const isOwner = role === 'SUPERADMIN'
       ? notification.tenantId === null
-      : notification.tenantId === tenantId;
+      : notification.tenantId === tenantId
+        && (notification.userId === null || notification.userId === userId);
 
     if (!isOwner) return res.status(403).json({ message: 'Sin permiso.' });
 
@@ -58,8 +61,10 @@ const markAsRead = async (req, res) => {
  */
 const markAllAsRead = async (req, res) => {
   try {
-    const { tenantId, role } = req.user;
-    const where = role === 'SUPERADMIN' ? { tenantId: null } : { tenantId };
+    const { tenantId, role, userId } = req.user;
+    const where = role === 'SUPERADMIN'
+      ? { tenantId: null }
+      : { tenantId, OR: [{ userId: null }, { userId }] };
 
     await prisma.notification.updateMany({ where, data: { read: true } });
     res.json({ message: 'Todas las notificaciones marcadas como leídas.' });
