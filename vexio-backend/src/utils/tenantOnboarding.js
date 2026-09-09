@@ -35,6 +35,15 @@ const createTenantWithOwner = async (prisma, { tenantName, tenantSlug, email, pa
       },
     });
 
+    // Toda operación de negocio se scopea a una sucursal (la "sucursal activa"
+    // del JWT). Un tenant sin ninguna Tienda dejaría a su OWNER sin poder
+    // operar nada — así que todo tenant nuevo arranca con una sucursal
+    // "Principal". El OWNER NO queda atado a ella (tiendaId null): OWNER/ADMIN
+    // eligen sucursal y pueden cambiar entre todas.
+    const tienda = await tx.tienda.create({
+      data: { name: 'Principal', tenantId: tenant.id },
+    });
+
     const user = await tx.user.create({
       data: {
         email,
@@ -45,7 +54,7 @@ const createTenantWithOwner = async (prisma, { tenantName, tenantSlug, email, pa
       },
     });
 
-    return { tenant, user };
+    return { tenant, user, tienda };
   });
 };
 

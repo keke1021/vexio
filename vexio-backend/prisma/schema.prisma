@@ -136,6 +136,17 @@ model RefreshToken {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Sucursal activa de ESTA sesión (no del perfil del usuario). La elige el
+  // usuario en el login (OWNER/ADMIN con >1 sucursal) o al cambiar de sucursal
+  // (POST /auth/select-tienda). Null mientras un OWNER/ADMIN multi-sucursal
+  // todavía no eligió. `POST /auth/refresh` re-emite el access token con esta
+  // sucursal — así el reload completo tras un cambio de sucursal arranca ya
+  // scopeado a la nueva. Dos navegadores del mismo usuario = dos filas = dos
+  // sucursales activas independientes. onDelete: SetNull — borrar una sucursal
+  // no invalida sesiones (refresh la recalcula).
+  activeTiendaId String?
+  activeTienda   Tienda? @relation(fields: [activeTiendaId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
 }
 
@@ -166,6 +177,8 @@ model Tienda {
   sales            Sale[]
   purchaseOrders   PurchaseOrder[]
   supplierPayments SupplierPayment[]
+  repairOrders     RepairOrder[]
+  activeSessions   RefreshToken[]
 
   stockTransfersFrom StockTransfer[] @relation("StockTransferFrom")
   stockTransfersTo   StockTransfer[] @relation("StockTransferTo")
@@ -758,10 +771,23 @@ model RepairOrder {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
+  // Sucursal física de la que proviene el equipo. Se completa al crear la
+  // orden (createRepair la deriva de la sucursal activa de quien la carga, o
+  // la elige explícitamente cuando el que carga no está atado a una sucursal
+  // — ej. TECH). Nullable solo por las órdenes previas a esta migración
+  // (backfill: primera Tienda del tenant). Scope: SELLER ve solo las de su
+  // sucursal activa; TECH las ve TODAS (excepción explícita — el taller es uno
+  // solo y recibe equipos de todas las sucursales), con esta sucursal de
+  // origen siempre visible en lista/detalle.
+  tiendaId String?
+  tienda   Tienda? @relation(fields: [tiendaId], references: [id])
+
   statusHistory RepairStatusHistory[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([tenantId, tiendaId])
 }
 
 // ─── Proveedores / Compras ────────────────────────────────────────────────────

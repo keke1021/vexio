@@ -20,6 +20,30 @@ const getRefreshTokenExpiry = () => {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 };
 
+/**
+ * Sucursales entre las que este usuario puede elegir como "sucursal activa".
+ *   - SUPERADMIN            → [] (no está sujeto a scope por sucursal).
+ *   - SELLER / TECH         → [su sucursal asignada]  (o [] si no tiene una).
+ *   - OWNER / ADMIN         → todas las Tienda del tenant.
+ * Devuelve [{ id, name }] ordenado por nombre.
+ */
+const resolveAvailableTiendas = async (user) => {
+  if (user.role === 'SUPERADMIN') return [];
+  if (user.role === 'SELLER' || user.role === 'TECH') {
+    if (!user.tiendaId) return [];
+    const t = await prisma.tienda.findFirst({
+      where: { id: user.tiendaId, tenantId: user.tenantId },
+      select: { id: true, name: true },
+    });
+    return t ? [t] : [];
+  }
+  return prisma.tienda.findMany({
+    where: { tenantId: user.tenantId },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+};
+
 // --- Controladores ---
 
 /**
@@ -74,35 +98,39 @@ const login = async (req, res) => {
 
     const tenant = user.tenant;
 
+    // Sucursal activa de la sesión. Si el usuario tiene una sola sucursal
+    // posible (SELLER/TECH con su asignada, u OWNER/ADMIN de un tenant con una
+    // sola Tienda) se elige automáticamente — sin pantalla extra. Si tiene
+    // varias (OWNER/ADMIN multi-sucursal), queda null: el frontend le pide
+    // elegir antes de entrar al resto de la app (sin default silencioso), vía
+    // POST /auth/select-tienda.
+    const availableTiendas = await resolveAvailableTiendas(user);
+    const activeTiendaId = availableTiendas.length === 1 ? availableTiendas[0].id : null;
+
     const accessToken = generateAccessToken({
       userId: user.id,
       tenantId: tenant?.id ?? user.tenantId,
       role: user.role,
-      // Necesario para assertTiendaAccess (StockTransfer) — sin esto,
-      // req.user.tiendaId es siempre undefined y SELLER/TECH quedan
-      // bloqueados de todo el módulo pase lo que pase. Mismo criterio de
-      // staleness que ya acepta este JWT para role/tenantId: si un admin
-      // reasigna la tienda de un usuario, tarda hasta JWT_EXPIRES_IN (15m
-      // default) en reflejarse, hasta el próximo refresh.
-      tiendaId: user.tiendaId,
+      tiendaId: activeTiendaId,
     });
 
     const refreshToken = generateRefreshToken();
 
     await prisma.refreshToken.create({
-      data: { token: refreshToken, userId: user.id, expiresAt: getRefreshTokenExpiry() },
+      data: { token: refreshToken, userId: user.id, expiresAt: getRefreshTokenExpiry(), activeTiendaId },
     });
 
     return res.status(200).json({
       accessToken,
       refreshToken,
-      // tiendaId: el frontend lo usa para mostrar/ocultar acciones de
-      // StockTransfer según la sucursal propia del usuario (UX — el
-      // enforcement real es siempre server-side, vía assertTiendaAccess).
       user: { id: user.id, email: user.email, name: user.name, role: user.role, tiendaId: user.tiendaId },
       tenant: tenant
         ? { id: tenant.id, name: tenant.name, slug: tenant.slug, activeModules: tenant.activeModules ?? [] }
         : { id: user.tenantId, name: 'Admin', slug: 'admin', activeModules: [] },
+      // Sucursal activa ya resuelta ({id,name}) o null si hay que elegir.
+      activeTienda: activeTiendaId ? availableTiendas.find((t) => t.id === activeTiendaId) : null,
+      // Lista para el selector (login multi-sucursal y cambio de sucursal).
+      availableTiendas,
     });
   } catch (error) {
     console.error('[login]', error);
@@ -161,20 +189,99 @@ const refresh = async (req, res) => {
       return res.status(401).json({ message: 'La cuenta o la tienda están inactivas.' });
     }
 
+    // Sucursal activa de esta sesión: la que quedó guardada en la fila del
+    // refresh token (elegida en login/select-tienda). Se re-valida contra las
+    // sucursales disponibles ahora — si la sucursal se borró, o al usuario le
+    // reasignaron otra, se recalcula (y se persiste el cambio).
+    const availableTiendas = await resolveAvailableTiendas(user);
+    let activeTiendaId = storedToken.activeTiendaId;
+    if (activeTiendaId && !availableTiendas.some((t) => t.id === activeTiendaId)) {
+      activeTiendaId = null;
+    }
+    if (!activeTiendaId && availableTiendas.length === 1) {
+      activeTiendaId = availableTiendas[0].id;
+    }
+    if (activeTiendaId !== storedToken.activeTiendaId) {
+      await prisma.refreshToken.update({ where: { id: storedToken.id }, data: { activeTiendaId } });
+    }
+
     const accessToken = generateAccessToken({
       userId: user.id,
       tenantId: user.tenantId,
       role: user.role,
-      tiendaId: user.tiendaId, // ver comentario en login()
+      tiendaId: activeTiendaId,
     });
 
     const tenantData = user.tenant
       ? { id: user.tenant.id, name: user.tenant.name, slug: user.tenant.slug, activeModules: user.tenant.activeModules ?? [] }
       : null;
 
-    return res.status(200).json({ accessToken, tenant: tenantData });
+    return res.status(200).json({
+      accessToken,
+      tenant: tenantData,
+      activeTienda: activeTiendaId ? availableTiendas.find((t) => t.id === activeTiendaId) : null,
+      availableTiendas,
+    });
   } catch (error) {
     console.error('[refresh]', error);
+    return res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+/**
+ * POST /api/auth/select-tienda
+ * Body: { refreshToken, tiendaId }
+ * Fija la sucursal activa de la sesión. Sirve para la selección inicial
+ * (OWNER/ADMIN multi-sucursal, tras el login) y para CAMBIAR de sucursal
+ * después. Valida que la sucursal esté entre las disponibles del usuario
+ * (un SELLER pidiendo otra sucursal → 403). Persiste la elección en la fila
+ * del refresh token y devuelve un access token nuevo scopeado a esa sucursal.
+ * El frontend hace un reload completo tras un cambio para que todo cargue
+ * limpio.
+ */
+const selectTienda = async (req, res) => {
+  try {
+    const { refreshToken, tiendaId } = req.body;
+
+    if (!refreshToken || !tiendaId) {
+      return res.status(400).json({ message: 'refreshToken y tiendaId son requeridos.' });
+    }
+
+    const storedToken = await prisma.refreshToken.findUnique({
+      where: { token: refreshToken },
+      include: { user: { include: { tenant: true } } },
+    });
+
+    if (!storedToken || storedToken.expiresAt < new Date()) {
+      return res.status(401).json({ message: 'Sesión inválida o expirada.' });
+    }
+
+    const { user } = storedToken;
+    if (!user.isActive || (user.role !== 'SUPERADMIN' && !user.tenant.isActive)) {
+      return res.status(401).json({ message: 'La cuenta o la tienda están inactivas.' });
+    }
+
+    const availableTiendas = await resolveAvailableTiendas(user);
+    const match = availableTiendas.find((t) => t.id === tiendaId);
+    if (!match) {
+      return res.status(403).json({ message: 'No tenés acceso a esa sucursal.' });
+    }
+
+    await prisma.refreshToken.update({
+      where: { id: storedToken.id },
+      data: { activeTiendaId: tiendaId },
+    });
+
+    const accessToken = generateAccessToken({
+      userId: user.id,
+      tenantId: user.tenantId,
+      role: user.role,
+      tiendaId,
+    });
+
+    return res.status(200).json({ accessToken, activeTienda: match, availableTiendas });
+  } catch (error) {
+    console.error('[selectTienda]', error);
     return res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
@@ -211,4 +318,4 @@ const changePassword = async (req, res) => {
   }
 };
 
-module.exports = { register, login, logout, refresh, changePassword };
+module.exports = { register, login, logout, refresh, selectTienda, changePassword };
