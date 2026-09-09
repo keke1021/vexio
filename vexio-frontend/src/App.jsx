@@ -30,6 +30,8 @@ import TransfersMain from './pages/transfers/TransfersMain';
 import TransferDetail from './pages/transfers/TransferDetail';
 import ReportsPage from './pages/reports/ReportsPage';
 import ChangePassword from './pages/settings/ChangePassword';
+import SettingsHome from './pages/settings/SettingsHome';
+import UsersList from './pages/settings/UsersList';
 import TicketsList from './pages/tickets/TicketsList';
 import TicketsNew from './pages/tickets/TicketsNew';
 import TicketDetail from './pages/tickets/TicketDetail';
@@ -62,6 +64,10 @@ const App = () => (
             <Route path="/tickets"       element={<TicketsList />} />
             <Route path="/tickets/new"   element={<TicketsNew />} />
             <Route path="/tickets/:id"   element={<TicketDetail />} />
+            {/* Configuración → Usuarios: solo lectura salvo la reasignación de
+                sucursal (que el backend restringe a OWNER). TECH no entra. */}
+            <Route path="/settings"       element={<SettingsHome />} />
+            <Route path="/settings/users" element={<UsersList />} />
           </Route>
 
           {/* Módulos gateados por rol (mismo criterio que el backend valida

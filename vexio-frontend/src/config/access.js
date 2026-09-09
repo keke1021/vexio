@@ -19,6 +19,7 @@ export const NAV = [
   { path: '/suppliers',  label: 'Proveedores',       exact: false, module: 'suppliers' },
   { path: '/transfers',  label: 'Transferencias',    exact: false, module: 'multibranch' },
   { path: '/tickets',    label: 'Soporte',           exact: false, module: null },
+  { path: '/settings',   label: 'Configuración',     exact: false, module: null },
 ];
 
 // Tier con acceso total. Cualquier módulo (y los items sin módulo: Inicio,
