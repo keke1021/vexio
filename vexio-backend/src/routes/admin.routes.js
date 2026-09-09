@@ -17,6 +17,29 @@ router.get('/ping', ...sa, (req, res) => {
   res.json({ ok: true, role: req.user?.role, userId: req.user?.userId });
 });
 
+// TEMPORAL — sembrado del tenant de demo "iPhonería" para grabar el Loom.
+// La DB de Railway no tiene proxy público, así que se corre el seed desde
+// adentro del contenedor vía este endpoint. SE ELIMINA apenas termina la
+// corrida. SUPERADMIN + string de confirmación. Sólo toca el tenant slug
+// `iphoneria-loom` (lo borra y recrea), nunca otro.
+router.post('/_seed-loom', ...sa, async (req, res) => {
+  if (req.body?.confirm !== 'iphoneria-loom-seed') {
+    return res.status(400).json({ message: 'Falta confirm.' });
+  }
+  try {
+    const { run } = require('../../seed-loom');
+    const logs = [];
+    const origLog = console.log;
+    console.log = (...a) => { logs.push(a.join(' ')); origLog(...a); };
+    await run();
+    console.log = origLog;
+    res.json({ ok: true, logs });
+  } catch (err) {
+    console.error('[_seed-loom]', err);
+    res.status(500).json({ message: String(err?.message || err) });
+  }
+});
+
 // Stats
 router.get('/stats',            ...sa, getStats);
 
