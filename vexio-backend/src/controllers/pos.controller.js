@@ -78,19 +78,17 @@ const looksLikeImei = (q) => IMEI_PLACEHOLDER_RE.test(q) || /\d{6,}/.test(q);
 
 const searchItem = async (req, res) => {
   try {
-    const { tenantId } = req.user;
-    const { q, tiendaId } = req.query;
+    const { tenantId, tiendaId } = req.user;
+    const { q } = req.query;
 
     if (!q || q.trim().length < 2) return res.json({ items: [] });
 
     const query = q.trim();
 
-    // tiendaId es opcional — el POS no lo manda (busca en todo el tenant,
-    // comportamiento sin cambios). Lo usa el flujo de "nueva transferencia"
-    // (TransfersMain/NewTransferModal) para acotar la búsqueda a los equipos
-    // realmente disponibles en la sucursal de origen — no tiene sentido
-    // ofrecer para transferir un equipo que ya está en otra sucursal.
-    const tiendaFilter = tiendaId ? { tiendaId } : {};
+    // SIEMPRE acotado a la sucursal activa: tanto el POS (vendés lo que tenés
+    // en tu sucursal) como el flujo de "nueva transferencia" (transferís desde
+    // tu sucursal) buscan solo el stock de la sucursal activa del JWT.
+    const tiendaFilter = { tiendaId };
 
     // Antes un solo OR buscaba el mismo string contra IMEI + nombre + color
     // a la vez — "15" (buscando "iPhone 15") matcheaba `imei contains "15"`
@@ -149,8 +147,8 @@ const searchItem = async (req, res) => {
  */
 const createSale = async (req, res) => {
   try {
-    const { tenantId, userId } = req.user;
-    const { items, paymentMethod, currency, customerName, customerPhone, customerEmail, notes, tiendaId } = req.body;
+    const { tenantId, userId, tiendaId } = req.user;
+    const { items, paymentMethod, currency, customerName, customerPhone, customerEmail, notes } = req.body;
 
     if (!items?.length) {
       return res.status(400).json({ message: 'El carrito no puede estar vacío.' });
@@ -161,16 +159,12 @@ const createSale = async (req, res) => {
     if (!Object.keys({ CASH: 1, TRANSFER: 1, CARD: 1, INSTALLMENTS: 1 }).includes(paymentMethod)) {
       return res.status(400).json({ message: 'Medio de pago inválido.' });
     }
-    if (!tiendaId) {
-      return res.status(400).json({ message: 'Falta indicar la sucursal donde se realiza la venta.' });
-    }
 
-    // Toda venta pertenece a una sucursal (Sale.tiendaId es obligatorio en el
-    // schema) — mismo criterio de validación de pertenencia que ya usa
-    // cash.controller.js (findTenantTienda).
+    // Toda venta pertenece a la SUCURSAL ACTIVA del JWT (se ignora cualquier
+    // tiendaId del body).
     const tienda = await findTenantTienda(prisma, tenantId, tiendaId);
     if (!tienda) {
-      return res.status(400).json({ message: 'La sucursal indicada no pertenece a tu tienda.' });
+      return res.status(400).json({ message: 'La sucursal activa de tu sesión ya no existe — volvé a elegir una.' });
     }
 
     const itemIds = items.map((i) => i.inventoryItemId);
@@ -190,14 +184,17 @@ const createSale = async (req, res) => {
       });
     }
 
-    // Verificar que todos los items existen y pertenecen al tenant
+    // Verificar que todos los items existen, pertenecen al tenant Y están
+    // físicamente en esta sucursal (regla de negocio del schema: una Sale no
+    // puede incluir stock de otra sucursal). Un item IN_TRANSIT no matchea
+    // status AVAILABLE más abajo y se rechaza igual.
     const inventoryItems = await prisma.inventoryItem.findMany({
-      where: { id: { in: itemIds }, tenantId },
+      where: { id: { in: itemIds }, tenantId, tiendaId },
       include: { product: true },
     });
 
     if (inventoryItems.length !== itemIds.length) {
-      return res.status(400).json({ message: 'Uno o más equipos no fueron encontrados.' });
+      return res.status(400).json({ message: 'Uno o más equipos no están disponibles en esta sucursal.' });
     }
 
     // Ninguno puede estar SOLD o DEFECTIVE
@@ -403,10 +400,12 @@ const createSale = async (req, res) => {
  */
 const getSales = async (req, res) => {
   try {
-    const { tenantId, userId, role } = req.user;
+    const { tenantId, userId, role, tiendaId } = req.user;
     const { from, to, paymentMethod, page = 1, limit = 50 } = req.query;
 
-    // Scope por rol
+    // Scope por rol (quién) + por sucursal activa (de dónde). Son dimensiones
+    // distintas: TECH/SELLER solo ven sus propias ventas, y todos ven solo las
+    // de la sucursal activa.
     const roleFilter = ['SELLER', 'TECH'].includes(role) ? { sellerId: userId } : {};
 
     // Rango de fechas: el "to" incluye el día completo
@@ -420,6 +419,7 @@ const getSales = async (req, res) => {
 
     const where = {
       tenantId,
+      tiendaId,
       ...roleFilter,
       ...(paymentMethod && { paymentMethod }),
       ...((from || to) && { createdAt: dateFilter }),
@@ -496,11 +496,11 @@ const getSales = async (req, res) => {
  */
 const getSaleById = async (req, res) => {
   try {
-    const { tenantId, userId, role } = req.user;
+    const { tenantId, userId, role, tiendaId } = req.user;
     const { id } = req.params;
 
     const sale = await prisma.sale.findFirst({
-      where: { id, tenantId },
+      where: { id, tenantId, tiendaId },
       include: {
         seller: { select: { id: true, name: true, role: true } },
         items: {

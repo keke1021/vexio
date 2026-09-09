@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate, authorize } = require('../middlewares/auth.middleware');
+const { authenticate, authorize, requireActiveTienda } = require('../middlewares/auth.middleware');
 const {
   getStats, getTechnicians,
   getAll, getById, createRepair, updateRepair, deleteRepair,
@@ -9,18 +9,20 @@ const router = express.Router();
 
 router.use(authenticate);
 
-// IMPORTANTE: rutas fijas deben ir ANTES de /:id para evitar conflictos de parámetros
-router.get('/repairs/stats', getStats);
-router.get('/repairs/technicians', getTechnicians);
-
 // Reparaciones: acceso para OWNER/ADMIN/SELLER/TECH (es el único módulo al que
-// entra TECH). El scope fino "TECH ve/edita solo sus órdenes asignadas" lo
-// resuelve el controller (roleScope). Borrar una orden queda para el tier
-// completo OWNER/ADMIN/SELLER (no TECH).
-router.get('/repairs', getAll);
-router.get('/repairs/:id', getById);
-router.post('/repairs', createRepair);
-router.put('/repairs/:id', updateRepair);
-router.delete('/repairs/:id', authorize('OWNER', 'ADMIN', 'SELLER'), deleteRepair);
+// entra TECH).
+//   - Dimensión ROL (sin cambios): "TECH ve/edita solo sus órdenes asignadas"
+//     lo resuelve el controller (roleScope). Borrar queda para OWNER/ADMIN/SELLER.
+//   - Dimensión SUCURSAL (Fase 2): OWNER/ADMIN/SELLER ven solo las de su
+//     sucursal activa; TECH ve las de TODAS las sucursales combinadas
+//     (excepción explícita) — requireActiveTienda deja pasar a TECH.
+router.get('/repairs/stats', requireActiveTienda, getStats);
+router.get('/repairs/technicians', getTechnicians); // lookup tenant-wide
+
+router.get('/repairs', requireActiveTienda, getAll);
+router.get('/repairs/:id', requireActiveTienda, getById);
+router.post('/repairs', requireActiveTienda, createRepair);
+router.put('/repairs/:id', requireActiveTienda, updateRepair);
+router.delete('/repairs/:id', authorize('OWNER', 'ADMIN', 'SELLER'), requireActiveTienda, deleteRepair);
 
 module.exports = router;

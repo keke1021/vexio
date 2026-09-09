@@ -185,13 +185,16 @@ const withDebt = (s) => {
  */
 const getSuppliers = async (req, res) => {
   try {
-    const { tenantId } = req.user;
+    const { tenantId, tiendaId } = req.user;
 
+    // El catálogo de proveedores es compartido (se listan todos), pero la
+    // deuda (`debtByCurrency`, de las órdenes PENDING) es de la SUCURSAL
+    // ACTIVA — cada sucursal ve lo que le debe ella al proveedor.
     const suppliers = await prisma.supplier.findMany({
       where: { tenantId, isActive: true },
       include: {
         purchaseOrders: {
-          where: { status: 'PENDING' },
+          where: { status: 'PENDING', tiendaId },
           select: { total: true, currencyCode: true },
         },
         _count: { select: { items: true } },
@@ -212,7 +215,7 @@ const getSuppliers = async (req, res) => {
  */
 const getSupplierById = async (req, res) => {
   try {
-    const { tenantId } = req.user;
+    const { tenantId, tiendaId } = req.user;
     const { id } = req.params;
 
     const supplier = await prisma.supplier.findFirst({
@@ -224,27 +227,29 @@ const getSupplierById = async (req, res) => {
 
     if (!supplier) return res.status(404).json({ message: 'Proveedor no encontrado.' });
 
+    // Órdenes / stats de ESTA SUCURSAL — el proveedor se ve desde cualquiera,
+    // pero sus órdenes y su deuda son de la sucursal activa.
     const [pendingByCur, receivedByCur, byStatus, orders] = await Promise.all([
       prisma.purchaseOrder.groupBy({
         by: ['currencyCode'],
-        where: { supplierId: id, tenantId, status: 'PENDING' },
+        where: { supplierId: id, tenantId, tiendaId, status: 'PENDING' },
         _sum: { total: true },
         _count: { id: true },
       }),
       prisma.purchaseOrder.groupBy({
         by: ['currencyCode'],
-        where: { supplierId: id, tenantId, status: 'RECEIVED' },
+        where: { supplierId: id, tenantId, tiendaId, status: 'RECEIVED' },
         _sum: { total: true },
         _count: { id: true },
       }),
       prisma.purchaseOrder.groupBy({
         by: ['status'],
-        where: { supplierId: id, tenantId },
+        where: { supplierId: id, tenantId, tiendaId },
         _count: { id: true },
       }),
       // total/pagado/pendiente por orden (nunca guardado, ver serializeOrder)
       prisma.purchaseOrder.findMany({
-        where: { supplierId: id, tenantId },
+        where: { supplierId: id, tenantId, tiendaId },
         include: ORDER_INCLUDE,
         orderBy: { createdAt: 'desc' },
       }),
@@ -378,7 +383,7 @@ const deleteSupplier = async (req, res) => {
  */
 const createOrder = async (req, res) => {
   try {
-    const { tenantId, userId } = req.user;
+    const { tenantId, userId, tiendaId } = req.user;
     const { id: supplierId } = req.params;
     const { items, notes, currency, downPayment } = req.body;
 
@@ -411,10 +416,12 @@ const createOrder = async (req, res) => {
     // motivo que en pos.controller.js/createSale: si la sucursal o la caja
     // no son válidas, hay que rechazar antes de tocar la DB, no a mitad de
     // la transacción.
+    // La seña, si sale de caja (CASH_REGISTER), sale de la caja de la SUCURSAL
+    // ACTIVA — se ignora cualquier tiendaId del body.
     let sourceCtx = { tienda: null, openSession: null };
     if (hasDownPayment) {
       try {
-        sourceCtx = await resolvePaymentSource(tenantId, downPayment.source, downPayment.tiendaId);
+        sourceCtx = await resolvePaymentSource(tenantId, downPayment.source, tiendaId);
       } catch (err) {
         return res.status(err.status ?? 500).json({ message: err.message ?? 'Error al validar la seña.' });
       }
@@ -428,6 +435,9 @@ const createOrder = async (req, res) => {
           notes: notes || null,
           supplierId,
           tenantId,
+          // La orden nace atada a la sucursal activa (antes tiendaId se
+          // completaba recién al marcarla RECEIVED).
+          tiendaId,
           items: {
             create: items.map((i) => ({
               description: i.description.trim(),
@@ -450,7 +460,7 @@ const createOrder = async (req, res) => {
           amount: downAmount,
           currencyCode: orderCurrency,
           source: downPayment.source,
-          tiendaId: downPayment.tiendaId,
+          tiendaId,
           openSession: sourceCtx.openSession,
           notes: downPayment.notes,
           description: `Seña — orden de compra #${created.id.slice(-6)}`,
@@ -473,14 +483,14 @@ const createOrder = async (req, res) => {
  */
 const getOrders = async (req, res) => {
   try {
-    const { tenantId } = req.user;
+    const { tenantId, tiendaId } = req.user;
     const { id: supplierId } = req.params;
 
     const supplier = await prisma.supplier.findFirst({ where: { id: supplierId, tenantId } });
     if (!supplier) return res.status(404).json({ message: 'Proveedor no encontrado.' });
 
     const orders = await prisma.purchaseOrder.findMany({
-      where: { supplierId, tenantId },
+      where: { supplierId, tenantId, tiendaId },
       include: {
         ...ORDER_INCLUDE,
         _count: { select: { items: true } },
@@ -523,7 +533,7 @@ const getOrders = async (req, res) => {
  */
 const updateOrder = async (req, res) => {
   try {
-    const { tenantId, userId } = req.user;
+    const { tenantId, userId, tiendaId } = req.user;
     const { id: supplierId, orderId } = req.params;
     const { status, notes } = req.body;
 
@@ -531,8 +541,9 @@ const updateOrder = async (req, res) => {
       return res.status(400).json({ message: 'Estado inválido. Debe ser RECEIVED o CANCELLED.' });
     }
 
+    // Solo órdenes de la sucursal activa.
     const order = await prisma.purchaseOrder.findFirst({
-      where: { id: orderId, supplierId, tenantId },
+      where: { id: orderId, supplierId, tenantId, tiendaId },
     });
     if (!order) return res.status(404).json({ message: 'Orden no encontrada.' });
     if (order.status !== 'PENDING') {
@@ -589,12 +600,15 @@ const updateOrder = async (req, res) => {
  */
 const addOrderPayment = async (req, res) => {
   try {
-    const { tenantId, userId } = req.user;
+    const { tenantId, userId, tiendaId } = req.user;
     const { id: orderId } = req.params;
-    const { amount, currency, source, tiendaId, notes } = req.body;
+    const { amount, currency, source, notes } = req.body;
 
+    // La orden tiene que ser de la sucursal activa, y si el pago sale de caja
+    // sale de la caja de esa misma sucursal (se ignora cualquier tiendaId del
+    // body).
     const order = await prisma.purchaseOrder.findFirst({
-      where: { id: orderId, tenantId },
+      where: { id: orderId, tenantId, tiendaId },
       include: ORDER_INCLUDE,
     });
     if (!order) return res.status(404).json({ message: 'Orden no encontrada.' });

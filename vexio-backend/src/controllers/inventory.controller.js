@@ -22,26 +22,25 @@ const serializeItem = (item) => ({
 
 /**
  * GET /api/inventory
- * Filtros: condition, status, productId, tiendaId, modelo (nombre de
- * producto, parcial), imei (arranca-con, no parcial en cualquier posición —
- * antes "search" mezclaba ambos en un OR parcial: buscar "16" para
- * "iPhone 16" también traía cualquier IMEI que tuviera "16" en el medio).
- * Paginado: page/pageSize (default 1/50) — el total y totalPages reflejan
- * los filtros activos, no el inventario completo.
+ * Filtros: condition, status, productId, modelo (nombre de producto, parcial),
+ * imei (arranca-con). Paginado: page/pageSize (default 1/50).
+ * SIEMPRE scopeado a la sucursal activa del JWT — el stock es por sucursal,
+ * nadie ve el inventario combinado de varias sucursales. Cualquier tiendaId
+ * que venga en la query se ignora.
  * Por defecto excluye los items con status DEFECTIVE.
  */
 const getAll = async (req, res) => {
   try {
-    const { tenantId } = req.user;
-    const { condition, status, productId, tiendaId, modelo, imei, page = 1, pageSize = 50 } = req.query;
+    const { tenantId, tiendaId } = req.user;
+    const { condition, status, productId, modelo, imei, page = 1, pageSize = 50 } = req.query;
 
     const where = {
       tenantId,
+      tiendaId,
       // Si no se pide un status específico, se ocultan los dados de baja
       ...(status ? { status } : { status: { not: 'DEFECTIVE' } }),
       ...(condition && { condition }),
       ...(productId && { productId }),
-      ...(tiendaId && { tiendaId }),
       ...(modelo && { product: { name: { contains: modelo, mode: 'insensitive' } } }),
       ...(imei && { imei: { startsWith: imei, mode: 'insensitive' } }),
     };
@@ -64,11 +63,12 @@ const getAll = async (req, res) => {
       prisma.inventoryItem.count({ where }),
     ]);
 
-    // Stock disponible por producto (para calcular badge de estado en frontend)
+    // Stock disponible por producto EN ESTA SUCURSAL (badge de estado en el
+    // frontend) — mismo scope que el listado.
     const productIds = [...new Set(items.map((i) => i.productId))];
     const stockGroups = await prisma.inventoryItem.groupBy({
       by: ['productId'],
-      where: { tenantId, status: 'AVAILABLE', productId: { in: productIds } },
+      where: { tenantId, tiendaId, status: 'AVAILABLE', productId: { in: productIds } },
       _count: { id: true },
     });
 
@@ -99,12 +99,14 @@ const getAll = async (req, res) => {
  */
 const getAlerts = async (req, res) => {
   try {
-    const { tenantId } = req.user;
+    const { tenantId, tiendaId } = req.user;
 
+    // Alertas de stock bajo DE ESTA SUCURSAL: el conteo de disponibles se
+    // filtra por tiendaId, el umbral (minStock) es del Product (tenant-wide).
     const products = await prisma.product.findMany({
       where: { tenantId },
       include: {
-        _count: { select: { items: { where: { status: 'AVAILABLE' } } } },
+        _count: { select: { items: { where: { status: 'AVAILABLE', tiendaId } } } },
       },
     });
 
@@ -129,12 +131,13 @@ const getAlerts = async (req, res) => {
  */
 const getById = async (req, res) => {
   try {
-    const { tenantId } = req.user;
+    const { tenantId, tiendaId } = req.user;
     const { id } = req.params;
-    const { tiendaId } = req.query;
 
+    // Scopeado a la sucursal activa: un equipo de otra sucursal responde 404,
+    // no se puede ver desde acá (para verlo hay que cambiar de sucursal).
     const item = await prisma.inventoryItem.findFirst({
-      where: { id, tenantId, ...(tiendaId && { tiendaId }) },
+      where: { id, tenantId, tiendaId },
       include: {
         product: true,
         supplier: true,
@@ -149,7 +152,7 @@ const getById = async (req, res) => {
     if (!item) return res.status(404).json({ message: 'Equipo no encontrado.' });
 
     const stockCount = await prisma.inventoryItem.count({
-      where: { tenantId, productId: item.productId, status: 'AVAILABLE' },
+      where: { tenantId, tiendaId, productId: item.productId, status: 'AVAILABLE' },
     });
 
     res.json({ ...serializeItem(item), stockCount });
@@ -161,24 +164,18 @@ const getById = async (req, res) => {
 
 /**
  * POST /api/inventory
- * Crea un InventoryItem. Si el modelo (Product) no existe lo crea automáticamente.
- * IMEI es opcional — no todo lo que se vende tiene uno real (fundas,
- * cargadores, accesorios). Si no viene, se genera un placeholder
- * VX-{timestamp}-{random4} — mismo criterio que bulkUpload, para que el
- * alta manual y la masiva se comporten igual.
+ * Crea un InventoryItem EN LA SUCURSAL ACTIVA del JWT (se ignora cualquier
+ * tiendaId del body). Si el modelo (Product) no existe lo crea automáticamente.
+ * IMEI es opcional — si no viene, se genera un placeholder
+ * VX-{timestamp}-{random4} (mismo criterio que bulkUpload).
  */
 const create = async (req, res) => {
   try {
-    const { tenantId } = req.user;
-    const { productName, color, storage, imei, condition, costPrice, salePrice, currencyCode, supplierId, accessories, notes, tiendaId } = req.body;
+    const { tenantId, tiendaId } = req.user;
+    const { productName, color, storage, imei, condition, costPrice, salePrice, currencyCode, supplierId, accessories, notes } = req.body;
 
-    if (!productName || !color || !storage || costPrice == null || salePrice == null || !tiendaId) {
-      return res.status(400).json({ message: 'Campos requeridos: modelo, color, storage, costo, precio de venta y tienda.' });
-    }
-
-    const tienda = await prisma.tienda.findFirst({ where: { id: tiendaId, tenantId } });
-    if (!tienda) {
-      return res.status(400).json({ message: 'La sucursal indicada no pertenece a tu tienda.' });
+    if (!productName || !color || !storage || costPrice == null || salePrice == null) {
+      return res.status(400).json({ message: 'Campos requeridos: modelo, color, storage, costo y precio de venta.' });
     }
 
     const finalImei = imei?.trim() || `VX-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -230,11 +227,12 @@ const create = async (req, res) => {
  */
 const update = async (req, res) => {
   try {
-    const { tenantId } = req.user;
+    const { tenantId, tiendaId } = req.user;
     const { id } = req.params;
     const { salePrice, costPrice, condition, status, notes, accessories } = req.body;
 
-    const existing = await prisma.inventoryItem.findFirst({ where: { id, tenantId } });
+    // Solo se puede editar stock de la sucursal activa.
+    const existing = await prisma.inventoryItem.findFirst({ where: { id, tenantId, tiendaId } });
     if (!existing) return res.status(404).json({ message: 'Equipo no encontrado.' });
 
     // Un ítem con un StockTransferItem vivo (currentTransferId poblado —
@@ -277,10 +275,10 @@ const update = async (req, res) => {
  */
 const remove = async (req, res) => {
   try {
-    const { tenantId } = req.user;
+    const { tenantId, tiendaId } = req.user;
     const { id } = req.params;
 
-    const existing = await prisma.inventoryItem.findFirst({ where: { id, tenantId } });
+    const existing = await prisma.inventoryItem.findFirst({ where: { id, tenantId, tiendaId } });
     if (!existing) return res.status(404).json({ message: 'Equipo no encontrado.' });
 
     // Mismo motivo que en update(): un ítem en tránsito no se puede dar de
@@ -382,25 +380,16 @@ const getProducts = async (req, res) => {
 
 /**
  * POST /api/inventory/bulk-upload
- * Carga masiva de equipos desde un archivo Excel.
+ * Carga masiva de equipos desde un archivo Excel — todos ingresan a la
+ * SUCURSAL ACTIVA del JWT (se ignora cualquier tiendaId del form-data).
  * IMEI es opcional — si no viene se genera VX-{timestamp}-{random4}.
  */
 const bulkUpload = async (req, res) => {
   try {
-    const { tenantId } = req.user;
-    const { tiendaId } = req.body;
+    const { tenantId, tiendaId } = req.user;
 
     if (!req.file) {
       return res.status(400).json({ message: 'No se recibió ningún archivo.' });
-    }
-
-    if (!tiendaId) {
-      return res.status(400).json({ message: 'Falta indicar la sucursal que recibe la carga.' });
-    }
-
-    const tienda = await prisma.tienda.findFirst({ where: { id: tiendaId, tenantId } });
-    if (!tienda) {
-      return res.status(400).json({ message: 'La sucursal indicada no pertenece a tu tienda.' });
     }
 
     const XLSX = require('xlsx');

@@ -83,15 +83,14 @@ const openCash = async (req, res) => {
   // quedaba como unhandled rejection, reiniciando el proceso entero.
   let tienda;
   try {
-    const { tenantId, userId } = req.user;
-    const { initialAmounts = {}, notes, tiendaId } = req.body;
+    // La caja se abre SIEMPRE en la sucursal activa del JWT — se ignora
+    // cualquier tiendaId del body (requireActiveTienda garantiza que existe).
+    const { tenantId, userId, tiendaId } = req.user;
+    const { initialAmounts = {}, notes } = req.body;
 
-    if (!tiendaId) {
-      return res.status(400).json({ message: 'Falta indicar la sucursal donde se abre la caja.' });
-    }
     tienda = await findTenantTienda(prisma, tenantId, tiendaId);
     if (!tienda) {
-      return res.status(400).json({ message: 'La sucursal indicada no pertenece a tu tienda.' });
+      return res.status(400).json({ message: 'La sucursal activa de tu sesión ya no existe — volvé a elegir una.' });
     }
 
     const existing = await prisma.cashSession.findFirst({
@@ -172,15 +171,12 @@ const openCash = async (req, res) => {
  */
 const closeCash = async (req, res) => {
   try {
-    const { tenantId, userId } = req.user;
-    const { notes, countedAmounts = {}, tiendaId } = req.body;
+    const { tenantId, userId, tiendaId } = req.user;
+    const { notes, countedAmounts = {} } = req.body;
 
-    if (!tiendaId) {
-      return res.status(400).json({ message: 'Falta indicar qué sucursal se está cerrando.' });
-    }
     const tienda = await findTenantTienda(prisma, tenantId, tiendaId);
     if (!tienda) {
-      return res.status(400).json({ message: 'La sucursal indicada no pertenece a tu tienda.' });
+      return res.status(400).json({ message: 'La sucursal activa de tu sesión ya no existe — volvé a elegir una.' });
     }
 
     const session = await prisma.cashSession.findFirst({
@@ -256,16 +252,7 @@ const closeCash = async (req, res) => {
  */
 const getCurrent = async (req, res) => {
   try {
-    const { tenantId } = req.user;
-    const { tiendaId } = req.query;
-
-    if (!tiendaId) {
-      return res.status(400).json({ message: 'Falta indicar la sucursal.' });
-    }
-    const tienda = await findTenantTienda(prisma, tenantId, tiendaId);
-    if (!tienda) {
-      return res.status(400).json({ message: 'La sucursal indicada no pertenece a tu tienda.' });
-    }
+    const { tenantId, tiendaId } = req.user;
 
     const session = (await getOpenSession(tenantId, tiendaId)) ?? (await getTodaySession(tenantId, tiendaId));
     if (!session) return res.json({ session: null, byCurrency: {} });
@@ -290,8 +277,8 @@ const getCurrent = async (req, res) => {
  */
 const addMovement = async (req, res) => {
   try {
-    const { tenantId, userId } = req.user;
-    const { type, amount, description, paymentMethod, currencyCode, exchangeRate, appliedRateBase, tiendaId } = req.body;
+    const { tenantId, userId, tiendaId } = req.user;
+    const { type, amount, description, paymentMethod, currencyCode, exchangeRate, appliedRateBase } = req.body;
 
     if (!['INCOME', 'EXPENSE'].includes(type)) {
       return res.status(400).json({ message: 'Tipo de movimiento inválido.' });
@@ -306,9 +293,6 @@ const addMovement = async (req, res) => {
     if (!paymentMethod) {
       return res.status(400).json({ message: 'El medio de pago es requerido.' });
     }
-    if (!tiendaId) {
-      return res.status(400).json({ message: 'Falta indicar la sucursal.' });
-    }
 
     const currency = await prisma.currency.findUnique({ where: { code: currencyCode || 'ARS' } });
     if (!currency || !currency.isActive) {
@@ -317,7 +301,7 @@ const addMovement = async (req, res) => {
 
     const tienda = await findTenantTienda(prisma, tenantId, tiendaId);
     if (!tienda) {
-      return res.status(400).json({ message: 'La sucursal indicada no pertenece a tu tienda.' });
+      return res.status(400).json({ message: 'La sucursal activa de tu sesión ya no existe — volvé a elegir una.' });
     }
 
     const session = await prisma.cashSession.findFirst({
@@ -374,23 +358,13 @@ const addMovement = async (req, res) => {
 };
 
 /**
- * GET /api/cash/movements?tiendaId=
- * Movimientos de la sesión actual de esa sucursal (o la última del día si
- * cerrada), más el balance por moneda calculado desde LedgerEntry.
- * tiendaId obligatorio, mismo motivo que en el resto del módulo.
+ * GET /api/cash/movements
+ * Movimientos de la sesión actual de la SUCURSAL ACTIVA (o la última del día
+ * si está cerrada), más el balance por moneda calculado desde LedgerEntry.
  */
 const getMovements = async (req, res) => {
   try {
-    const { tenantId } = req.user;
-    const { tiendaId } = req.query;
-
-    if (!tiendaId) {
-      return res.status(400).json({ message: 'Falta indicar la sucursal.' });
-    }
-    const tienda = await findTenantTienda(prisma, tenantId, tiendaId);
-    if (!tienda) {
-      return res.status(400).json({ message: 'La sucursal indicada no pertenece a tu tienda.' });
-    }
+    const { tenantId, tiendaId } = req.user;
 
     const session =
       (await prisma.cashSession.findFirst({ where: { tenantId, tiendaId, closedAt: null } })) ??
@@ -425,29 +399,19 @@ const getMovements = async (req, res) => {
 // ─── Historial de sesiones ──────────────────────────────────────────────────────
 
 /**
- * GET /api/cash/sessions?tiendaId=&page=&pageSize=
- * Historial de CashSession del tenant (abiertas y cerradas), más recientes
- * primero. tiendaId es OPCIONAL acá — a diferencia del resto del módulo,
- * esta es una pantalla de consulta que puede ver todas las sucursales a la
- * vez si no se filtra ninguna en particular. Paginado con el mismo patrón
- * page/pageSize que inventory.controller.js (default 1/50).
- * Cada sesión trae su balance final por moneda (calculado desde
- * LedgerEntry, mismo criterio que getSessionBreakdown) y sus ajustes de
- * cierre, si tuvo.
+ * GET /api/cash/sessions?page=&pageSize=
+ * Historial de CashSession DE LA SUCURSAL ACTIVA (abiertas y cerradas), más
+ * recientes primero. Ya no hay vista combinada de todas las sucursales —
+ * nadie ve varias a la vez. Paginado page/pageSize (default 1/50).
+ * Cada sesión trae su balance final por moneda (calculado desde LedgerEntry,
+ * mismo criterio que getSessionBreakdown) y sus ajustes de cierre, si tuvo.
  */
 const getSessions = async (req, res) => {
   try {
-    const { tenantId } = req.user;
-    const { tiendaId, page = 1, pageSize = 50 } = req.query;
+    const { tenantId, tiendaId } = req.user;
+    const { page = 1, pageSize = 50 } = req.query;
 
-    if (tiendaId) {
-      const tienda = await findTenantTienda(prisma, tenantId, tiendaId);
-      if (!tienda) {
-        return res.status(400).json({ message: 'La sucursal indicada no pertenece a tu tienda.' });
-      }
-    }
-
-    const where = { tenantId, ...(tiendaId && { tiendaId }) };
+    const where = { tenantId, tiendaId };
     const pageNum     = Math.max(parseInt(page) || 1, 1);
     const pageSizeNum = Math.max(parseInt(pageSize) || 50, 1);
 
@@ -522,11 +486,12 @@ const getSessions = async (req, res) => {
  */
 const getSessionById = async (req, res) => {
   try {
-    const { tenantId } = req.user;
+    const { tenantId, tiendaId } = req.user;
     const { id } = req.params;
 
+    // Scopeada a la sucursal activa: una sesión de otra sucursal responde 404.
     const session = await prisma.cashSession.findFirst({
-      where: { id, tenantId },
+      where: { id, tenantId, tiendaId },
       include: SESSION_INCLUDE,
     });
     if (!session) return res.status(404).json({ message: 'Sesión de caja no encontrada.' });
@@ -562,24 +527,14 @@ const getSessionById = async (req, res) => {
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 /**
- * GET /api/cash/summary?tiendaId=
- * Balance por moneda de la sesión actual de esa sucursal (o la última del
- * día), desglose por medio de pago y moneda. Nunca devuelve un número único
- * mezclando monedas. tiendaId obligatorio, mismo motivo que en el resto del
- * módulo — cada sucursal tiene su propio resumen, no se mezclan entre sí.
+ * GET /api/cash/summary
+ * Balance por moneda de la sesión actual de la SUCURSAL ACTIVA (o la última
+ * del día), desglose por medio de pago y moneda. Nunca mezcla monedas ni
+ * sucursales.
  */
 const getSummary = async (req, res) => {
   try {
-    const { tenantId } = req.user;
-    const { tiendaId } = req.query;
-
-    if (!tiendaId) {
-      return res.status(400).json({ message: 'Falta indicar la sucursal.' });
-    }
-    const tienda = await findTenantTienda(prisma, tenantId, tiendaId);
-    if (!tienda) {
-      return res.status(400).json({ message: 'La sucursal indicada no pertenece a tu tienda.' });
-    }
+    const { tenantId, tiendaId } = req.user;
 
     let session = await prisma.cashSession.findFirst({
       where: { tenantId, tiendaId, closedAt: null },

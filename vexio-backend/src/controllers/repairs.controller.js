@@ -9,9 +9,21 @@ const serializeRepair = (repair) => ({
   budget: repair.budget != null ? parseFloat(repair.budget) : null,
 });
 
-// Scope según rol: TECH solo ve sus propias órdenes asignadas
+// ── Dos dimensiones de scope, independientes entre sí ──────────────────────
+// ROL (quién): TECH solo ve/edita sus propias órdenes asignadas.
 const roleScope = (role, userId) =>
   role === 'TECH' ? { technicianId: userId } : {};
+
+// SUCURSAL (de dónde es el equipo): OWNER/ADMIN/SELLER ven solo las órdenes de
+// su sucursal activa. TECH es la EXCEPCIÓN EXPLÍCITA: ve las de TODAS las
+// sucursales combinadas (el taller es uno solo y recibe equipos de todas), sin
+// elegir ninguna — cada orden igual expone su tiendaId de origen.
+const branchScope = (req) =>
+  req.user.role === 'TECH' || req.user.role === 'SUPERADMIN'
+    ? {}
+    : { tiendaId: req.user.tiendaId };
+
+const TIENDA_SELECT = { select: { id: true, name: true } };
 
 // ─── Stats (usada por el badge del Layout) ────────────────────────────────────
 
@@ -22,7 +34,7 @@ const roleScope = (role, userId) =>
 const getStats = async (req, res) => {
   try {
     const { tenantId, userId, role } = req.user;
-    const scope = roleScope(role, userId);
+    const scope = { ...roleScope(role, userId), ...branchScope(req) };
 
     const [active, ready] = await prisma.$transaction([
       prisma.repairOrder.count({
@@ -75,6 +87,7 @@ const getAll = async (req, res) => {
     const where = {
       tenantId,
       ...roleScope(role, userId),
+      ...branchScope(req),
       ...(status && { status }),
       // Solo OWNER/ADMIN pueden filtrar por técnico ajeno
       ...(technicianId && role !== 'TECH' && { technicianId }),
@@ -92,6 +105,7 @@ const getAll = async (req, res) => {
         where,
         include: {
           technician: { select: { id: true, name: true } },
+          tienda: TIENDA_SELECT,
         },
         orderBy: { createdAt: 'desc' },
         skip: (parseInt(page) - 1) * parseInt(limit),
@@ -117,9 +131,10 @@ const getById = async (req, res) => {
     const { id } = req.params;
 
     const repair = await prisma.repairOrder.findFirst({
-      where: { id, tenantId, ...roleScope(role, userId) },
+      where: { id, tenantId, ...roleScope(role, userId), ...branchScope(req) },
       include: {
         technician: { select: { id: true, name: true, role: true } },
+        tienda: TIENDA_SELECT,
         customer: true,
         statusHistory: {
           include: { changedBy: { select: { id: true, name: true } } },
@@ -147,13 +162,31 @@ const createRepair = async (req, res) => {
     const {
       customerName, customerPhone, deviceModel, deviceColor, deviceImei,
       faultType, faultDescription, technicianId, budget, estimatedDate,
-      internalNotes, customerId,
+      internalNotes, customerId, tiendaId: bodyTiendaId,
     } = req.body;
 
     if (!customerName || !customerPhone || !deviceModel || !faultType || !faultDescription) {
       return res.status(400).json({
         message: 'Campos requeridos: nombre y teléfono del cliente, modelo, tipo de falla y descripción.',
       });
+    }
+
+    // Sucursal de origen del equipo:
+    //   - OWNER/ADMIN/SELLER → SIEMPRE su sucursal activa (se ignora el body).
+    //   - TECH → puede elegir cualquier sucursal del tenant (el equipo puede
+    //     venir de cualquiera); si no elige, cae a su sucursal asignada.
+    let tiendaId;
+    if (role === 'TECH') {
+      tiendaId = bodyTiendaId || req.user.tiendaId || null;
+      if (!tiendaId) {
+        return res.status(400).json({ message: 'Indicá de qué sucursal viene el equipo.' });
+      }
+      const tienda = await prisma.tienda.findFirst({ where: { id: tiendaId, tenantId } });
+      if (!tienda) {
+        return res.status(400).json({ message: 'La sucursal indicada no pertenece a tu tienda.' });
+      }
+    } else {
+      tiendaId = req.user.tiendaId;
     }
 
     // TECH sin técnico asignado → se asigna a sí mismo
@@ -175,9 +208,11 @@ const createRepair = async (req, res) => {
           technicianId: assignedTechId,
           customerId: customerId || null,
           tenantId,
+          tiendaId,
         },
         include: {
           technician: { select: { id: true, name: true } },
+          tienda: TIENDA_SELECT,
         },
       });
 
@@ -214,7 +249,7 @@ const updateRepair = async (req, res) => {
     const { status, budget, estimatedDate, internalNotes, technicianId, faultDescription, statusNote } = req.body;
 
     const existing = await prisma.repairOrder.findFirst({
-      where: { id, tenantId, ...roleScope(role, userId) },
+      where: { id, tenantId, ...roleScope(role, userId), ...branchScope(req) },
     });
 
     if (!existing) return res.status(404).json({ message: 'Orden no encontrada.' });
@@ -237,6 +272,7 @@ const updateRepair = async (req, res) => {
         },
         include: {
           technician: { select: { id: true, name: true, role: true } },
+          tienda: TIENDA_SELECT,
           customer: true,
           statusHistory: {
             include: { changedBy: { select: { id: true, name: true } } },
@@ -275,7 +311,9 @@ const deleteRepair = async (req, res) => {
     const { tenantId } = req.user;
     const { id } = req.params;
 
-    const existing = await prisma.repairOrder.findFirst({ where: { id, tenantId } });
+    // deleteRepair es authorize('OWNER','ADMIN','SELLER') — nunca TECH — así
+    // que branchScope siempre acota a la sucursal activa.
+    const existing = await prisma.repairOrder.findFirst({ where: { id, tenantId, ...branchScope(req) } });
     if (!existing) return res.status(404).json({ message: 'Orden no encontrada.' });
 
     await prisma.repairOrder.delete({ where: { id } });

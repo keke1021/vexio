@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate, authorize } = require('../middlewares/auth.middleware');
+const { authenticate, authorize, requireActiveTienda } = require('../middlewares/auth.middleware');
 const {
   getSuppliers, getSupplierById, createSupplier, updateSupplier, deleteSupplier,
   createOrder, getOrders, updateOrder, addOrderPayment,
@@ -8,11 +8,15 @@ const {
 
 router.use(authenticate);
 
-// Proveedores: OWNER / ADMIN / SELLER tienen acceso COMPLETO (no solo lectura)
-// a todo el módulo — listado, detalle, historial de órdenes y pagos, alta,
-// edición y baja de proveedores, órdenes de compra, señas y pagos/cobros.
-// TECH no accede a nada de Proveedores.
-const canUseSuppliers = authorize('OWNER', 'ADMIN', 'SELLER');
+// Proveedores: OWNER / ADMIN / SELLER tienen acceso COMPLETO. TECH no accede.
+//
+// Scope por sucursal (Fase 2): el CATÁLOGO de proveedores es compartido entre
+// sucursales (un proveedor no es "de una sucursal"), pero las ÓRDENES DE
+// COMPRA y los PAGOS se scopean a la sucursal activa del JWT — createOrder la
+// estampa al crear la orden, los listados/detalle filtran por ella. Por eso
+// requireActiveTienda va en todo el módulo: siempre se opera "parado" en una
+// sucursal, aunque el proveedor en sí se vea desde cualquiera.
+const canUseSuppliers = [authorize('OWNER', 'ADMIN', 'SELLER'), requireActiveTienda];
 
 router.get('/suppliers',        canUseSuppliers, getSuppliers);
 router.post('/suppliers',       canUseSuppliers, createSupplier);

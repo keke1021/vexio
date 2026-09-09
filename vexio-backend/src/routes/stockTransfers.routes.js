@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate, authorize } = require('../middlewares/auth.middleware');
+const { authenticate, authorize, requireActiveTienda } = require('../middlewares/auth.middleware');
 const {
   addItem, getOpenLot, dispatch, receiveItem, receiveAll, cancelItem,
   getTransfers, getTransferById,
@@ -11,14 +11,14 @@ router.use(authenticate);
 
 // Transferencias (módulo multibranch): OWNER/ADMIN/SELLER acceso completo.
 // TECH no accede a nada de Transferencias.
-// authorize por-ruta y NO como router.use(...): este router está montado en el
-// prefijo compartido '/api', así que un router.use(authorize) rechazaría
-// también requests de otros módulos (pos, repairs, cash...) que apenas
-// atraviesan este router antes de caer en el suyo.
-// (El controller todavía llama assertTiendaAccess en cada endpoint, pero como
-//  OWNER/ADMIN/SELLER son todos unrestricted, hoy es un no-op — ver
-//  utils/tiendaAuth.js.)
-const canUseTransfers = authorize('OWNER', 'ADMIN', 'SELLER');
+// authorize / requireActiveTienda por-ruta y NO como router.use(...): este
+// router está montado en el prefijo compartido '/api', así que un
+// router.use(...) rechazaría también requests de otros módulos (pos, repairs,
+// cash...) que apenas atraviesan este router antes de caer en el suyo.
+// El controller valida cada endpoint contra la sucursal activa del JWT vía
+// assertTiendaAccess (origen para sacar/despachar, destino para recibir) —
+// reactivado en Fase 2 (utils/tiendaAuth.js: solo SUPERADMIN es unrestricted).
+const canUseTransfers = [authorize('OWNER', 'ADMIN', 'SELLER'), requireActiveTienda];
 
 // IMPORTANTE: /deliveries y /open deben ir ANTES de /:id (mismo motivo que
 // /pos/sales antes de /pos/sales/:id, /cash/sessions antes de /:id, etc.)

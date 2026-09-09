@@ -204,28 +204,26 @@ const addItem = async (req, res) => {
 };
 
 /**
- * GET /api/stock-transfers/open?fromTiendaId=&toTiendaId=
- * Preview del lote OPEN de esa combinación, si existe — para que la UI
- * muestre "ya tiene 3 ítems" antes de agregar el primero.
+ * GET /api/stock-transfers/open?toTiendaId=
+ * Preview del lote OPEN desde la SUCURSAL ACTIVA hacia toTiendaId, si existe —
+ * para que la UI muestre "ya tiene 3 ítems" antes de agregar el primero.
+ * El origen es siempre la sucursal activa (transferís desde tu sucursal).
  */
 const getOpenLot = async (req, res) => {
   try {
-    const { tenantId } = req.user;
-    const { fromTiendaId, toTiendaId } = req.query;
+    const { tenantId, tiendaId: fromTiendaId } = req.user;
+    const { toTiendaId } = req.query;
 
-    if (!fromTiendaId || !toTiendaId) {
-      return res.status(400).json({ message: 'Falta indicar sucursal origen y destino.' });
+    if (!toTiendaId) {
+      return res.status(400).json({ message: 'Falta indicar la sucursal destino.' });
+    }
+    if (toTiendaId === fromTiendaId) {
+      return res.status(400).json({ message: 'El origen y el destino no pueden ser la misma sucursal.' });
     }
 
-    const [fromTienda, toTienda] = await Promise.all([
-      findTenantTienda(prisma, tenantId, fromTiendaId),
-      findTenantTienda(prisma, tenantId, toTiendaId),
-    ]);
-    if (!fromTienda || !toTienda) {
-      return res.status(400).json({ message: 'Alguna de las sucursales indicadas no pertenece a tu tienda.' });
-    }
-    if (!assertTiendaAccess(req.user, fromTiendaId)) {
-      return res.status(403).json({ message: 'Tu usuario no está asignado a esa sucursal.' });
+    const toTienda = await findTenantTienda(prisma, tenantId, toTiendaId);
+    if (!toTienda) {
+      return res.status(400).json({ message: 'La sucursal destino no pertenece a tu tienda.' });
     }
 
     const transfer = await prisma.stockTransfer.findFirst({
@@ -456,30 +454,21 @@ const cancelItem = async (req, res) => {
 };
 
 /**
- * GET /api/stock-transfers?tiendaId=&direction=incoming|outgoing&status=
- * OWNER/ADMIN/SELLER/SUPERADMIN: sin tiendaId ven TODO el tenant; con tiendaId
- * filtran a esa sucursal. (TECH no accede a este módulo — gate a nivel de
- * ruta.)
+ * GET /api/stock-transfers?direction=incoming|outgoing&status=
+ * SIEMPRE scopeado a la sucursal activa del JWT: se listan solo los lotes que
+ * TOCAN esa sucursal (como origen o destino). Ya no hay vista combinada de
+ * todo el tenant. `direction` acota a salientes (origen) o entrantes (destino).
+ * (TECH no accede a este módulo — gate a nivel de ruta.)
  */
 const getTransfers = async (req, res) => {
   try {
-    const { tenantId } = req.user;
-    const { tiendaId, direction, status, page = 1, pageSize = 20 } = req.query;
+    const { tenantId, tiendaId } = req.user;
+    const { direction, status, page = 1, pageSize = 20 } = req.query;
 
-    let tiendaFilter = {};
-
-    if (tiendaId) {
-      const tienda = await findTenantTienda(prisma, tenantId, tiendaId);
-      if (!tienda) return res.status(400).json({ message: 'La sucursal indicada no pertenece a tu tienda.' });
-      if (!assertTiendaAccess(req.user, tiendaId)) {
-        return res.status(403).json({ message: 'Tu usuario no está asignado a esa sucursal.' });
-      }
-      if (direction === 'outgoing') tiendaFilter = { fromTiendaId: tiendaId };
-      else if (direction === 'incoming') tiendaFilter = { toTiendaId: tiendaId };
-      else tiendaFilter = { OR: [{ fromTiendaId: tiendaId }, { toTiendaId: tiendaId }] };
-    }
-    // Sin tiendaId: todos los roles con acceso al módulo ven el listado
-    // completo del tenant (TECH está bloqueado a nivel de ruta).
+    let tiendaFilter;
+    if (direction === 'outgoing') tiendaFilter = { fromTiendaId: tiendaId };
+    else if (direction === 'incoming') tiendaFilter = { toTiendaId: tiendaId };
+    else tiendaFilter = { OR: [{ fromTiendaId: tiendaId }, { toTiendaId: tiendaId }] };
 
     const pageNum = Math.max(parseInt(page) || 1, 1);
     const pageSizeNum = Math.max(parseInt(pageSize) || 20, 1);

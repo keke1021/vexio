@@ -33,10 +33,10 @@ const buildDateFilter = (from, to) => {
  */
 const getSalesReport = async (req, res) => {
   try {
-    const { tenantId } = req.user;
+    const { tenantId, tiendaId } = req.user;
     const { from, to } = req.query;
     const dateFilter = buildDateFilter(from, to);
-    const where = { tenantId, ...(dateFilter && { createdAt: dateFilter }) };
+    const where = { tenantId, tiendaId, ...(dateFilter && { createdAt: dateFilter }) };
 
     const [byPaymentRaw, byCurrencyRaw, allSales] = await Promise.all([
       prisma.sale.groupBy({
@@ -113,13 +113,13 @@ const getSalesReport = async (req, res) => {
  */
 const getProductsReport = async (req, res) => {
   try {
-    const { tenantId } = req.user;
+    const { tenantId, tiendaId } = req.user;
     const { from, to } = req.query;
     const dateFilter = buildDateFilter(from, to);
 
     const saleItems = await prisma.saleItem.findMany({
       where: {
-        sale: { tenantId, ...(dateFilter && { createdAt: dateFilter }) },
+        sale: { tenantId, tiendaId, ...(dateFilter && { createdAt: dateFilter }) },
       },
       select: {
         salePrice: true,
@@ -182,25 +182,25 @@ const getProductsReport = async (req, res) => {
  */
 const getInventoryReport = async (req, res) => {
   try {
-    const { tenantId } = req.user;
+    const { tenantId, tiendaId } = req.user;
 
     const [byCurrencyRaw, byCondition, products] = await Promise.all([
       prisma.inventoryItem.groupBy({
         by: ['currencyCode'],
-        where: { tenantId, status: 'AVAILABLE' },
+        where: { tenantId, tiendaId, status: 'AVAILABLE' },
         _sum: { costPrice: true, salePrice: true },
         _count: { id: true },
       }),
       prisma.inventoryItem.groupBy({
         by: ['condition'],
-        where: { tenantId, status: 'AVAILABLE' },
+        where: { tenantId, tiendaId, status: 'AVAILABLE' },
         _count: { id: true },
         _sum: { costPrice: true, salePrice: true },
       }),
       prisma.product.findMany({
         where: { tenantId },
         include: {
-          _count: { select: { items: { where: { status: 'AVAILABLE' } } } },
+          _count: { select: { items: { where: { status: 'AVAILABLE', tiendaId } } } },
         },
       }),
     ]);
@@ -252,10 +252,13 @@ const getInventoryReport = async (req, res) => {
  */
 const getRepairsReport = async (req, res) => {
   try {
-    const { tenantId } = req.user;
+    // Reportes nunca los ve TECH (canViewReports = OWNER/ADMIN/SELLER), así
+    // que acá siempre se scopea a la sucursal activa — la excepción "TECH ve
+    // todas las sucursales" solo aplica al listado del módulo Reparaciones.
+    const { tenantId, tiendaId } = req.user;
     const { from, to } = req.query;
     const dateFilter = buildDateFilter(from, to);
-    const where = { tenantId, ...(dateFilter && { createdAt: dateFilter }) };
+    const where = { tenantId, tiendaId, ...(dateFilter && { createdAt: dateFilter }) };
 
     const [byStatus, completed] = await Promise.all([
       prisma.repairOrder.groupBy({
@@ -321,22 +324,27 @@ const getRepairsReport = async (req, res) => {
  */
 const getCashReport = async (req, res) => {
   try {
-    const { tenantId } = req.user;
+    const { tenantId, tiendaId } = req.user;
     const { from, to } = req.query;
     const dateFilter = buildDateFilter(from, to);
 
+    // LedgerEntry / CashMovement no tienen tiendaId propio — heredan la
+    // sucursal de su CashSession. Los entries excluidos
+    // (PURCHASE_ORDER / SUBSCRIPTION_PAYMENT / SUPPLIER_PAYMENT_EXTERNAL) no
+    // tienen cashSession, pero ya quedan afuera por el notIn.
     const [entries, byPaymentRaw] = await Promise.all([
       prisma.ledgerEntry.findMany({
         where: {
           tenantId,
           type: { notIn: TENANT_BALANCE_EXCLUDED_TYPES },
+          cashSession: { tiendaId },
           ...(dateFilter && { createdAt: dateFilter }),
         },
         select: { currencyCode: true, amount: true, type: true },
       }),
       prisma.cashMovement.groupBy({
         by: ['paymentMethod', 'type', 'currencyCode'],
-        where: { tenantId, ...(dateFilter && { createdAt: dateFilter }) },
+        where: { tenantId, session: { tiendaId }, ...(dateFilter && { createdAt: dateFilter }) },
         _sum: { amount: true },
       }),
     ]);
